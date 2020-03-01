@@ -71,7 +71,7 @@ extern mosPtr theJumpTable;
 extern byte gFilterStdoutDataFrom;
 extern byte gFilterStdoutDataTo;
 
-const unsigned int kMosMemMax        = 256*1024;  // Size of emulated RAM
+const unsigned int kMosMemMax        = 2*1024*1024;  // Size of emulated RAM
 
 const unsigned int kMosApplLimit      = 0x0130;  // Application heap limit
 const unsigned int kMosApplZone       = 0x02aa;  // Address of application heap zone

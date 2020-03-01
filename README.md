@@ -10,6 +10,15 @@ Note
 mosrun was designed as a 32 bit executable. This is an effort to port mosrun
 to 64 bit, as required by macOS and soon all new operating systems.
 
+Mamory allocation and perticularly freeing memory is not yet implemented
+all the way.
+
+At this point, mosrun compiles and links and runs the embedded code. The
+FileIO functions for duplicating file descriptors and testing if a file
+descriptor points a terminal need to be implemented.
+
+Everything must be throughly tested still.
+
 If you want the original mosrun code, go to
 https://github.com/MatthiasWM/dynee5/tree/master/Alienate/mosrun
 

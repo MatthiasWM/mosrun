@@ -17,6 +17,8 @@
  
  The author can be contacted at mosrun AT matthiasm DOT com.
  The latest source code can be found at http://code.google.com/p/dynee5/
+
+ This code is 64 bit safe.
  */
 
 #include "fileio.h"

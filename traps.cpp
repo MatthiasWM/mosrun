@@ -38,6 +38,7 @@
 #include <errno.h>
 #include <string.h>
 #include <time.h>
+#include <stdlib.h>
 #include <sys/time.h>
 
 // Include our own interfaces
@@ -96,16 +97,18 @@ void hexDump(mosPtr a, unsigned int n)
 }
 
 
-typedef void (*TrapNative)(unsigned short);
-typedef struct {
-    unsigned short cmd;
-    TrapNative trapNative;
-    unsigned short rts;
-} TrapNativeCall;
+//typedef void (*TrapNative)(unsigned short);
+//typedef struct {
+//    unsigned short cmd;
+//    TrapNative trapNative;
+//    unsigned short rts;
+//} TrapNativeCall;
 
 
 uint16_t gCurrentTrap = 0;
-TrapNativeCall **tncTable = 0;
+
+// every entry in this array points to an m68k code segmen ("glue") that calls a native function in host memory
+mosPtr *tncTable = 0;
 
 
 /**
@@ -444,12 +447,12 @@ void trapGetTrapAddress(unsigned short)
  */
 void trapSetTrapAddress(unsigned short)
 {
-    unsigned int trap = m68k_get_reg(0L, M68K_REG_D0);
-    unsigned int addr = m68k_get_reg(0L, M68K_REG_A0);
+    uint32_t trap = m68k_get_reg(0L, M68K_REG_D0);
+    mosPtr addr = m68k_get_reg(0L, M68K_REG_A0);
 
     trap = (trap & 0x0dff) | 0xa800;
     mosTrace("            SetTrapAddress(0x%04X=%s, 0x%08X)\n", trap, trapName(trap), addr);
-    tncTable[trap&0x0fff] = (TrapNativeCall*)addr;
+    tncTable[trap&0x0fff] = addr;
 }
 
 
@@ -960,11 +963,10 @@ void trapGoNative(unsigned short instr)
 {
     unsigned int pc = m68k_get_reg(0L, M68K_REG_PC);
 
-    TrapNativeCall *tnc = (TrapNativeCall*)(pc);
-    TrapNative callTrap = tnc->trapNative;
-    callTrap(gCurrentTrap);
+    void (*nativeCodeEntry)(uint16_t) = (void (*)(uint16_t))mosRead64(pc+4);
+    nativeCodeEntry(gCurrentTrap);
 
-    pc = (unsigned int)(&(tnc->rts));
+    pc = pc + 12; // skip alignment space and native target address
     m68k_set_reg(M68K_REG_PC, pc);
 }
 
@@ -1022,16 +1024,16 @@ void trapDispatch(unsigned short)
 /**
  * Create jump table entry in simulator space.
  */
-mosPtr createGlue(unsigned short index, mosTrap trap)
+mosPtr createGlue(unsigned short index, void (*nativeCodeEntry)(uint16_t))
 {
     // FIXME: unaligned format
-    mosPtr p = mosNewPtr(12);
-    mosWrite16(p,   0xAFFF);              // trap native
-    *((unsigned int*)(p+4)) = (unsigned int)trap;  // function pointer
-    mosWrite16(p+8, 0x4E75);              // rts
+    mosPtr p = mosNewPtr(16);
+    mosWrite16(p+ 0, 0xAFFF);           // trap native
+    mosWrite64(p+ 4, (uintptr_t)nativeCodeEntry);  // pointer into host memory
+    mosWrite16(p+12, 0x4E75);           // rts
 
     if (index) {
-        tncTable[index&0x0FFF] = (TrapNativeCall*)p;
+        tncTable[index&0x0FFF] = p;
     }
 
     return p;
@@ -1046,9 +1048,9 @@ void mosSetupTrapTable()
     int i;
 
     mosPtr tncUnimplemented = createGlue(0, trapUninmplemented);
-    tncTable = (TrapNativeCall**)mosNewPtr(0x0fff*4);
+    tncTable = (mosPtr*)calloc(0x0fff, sizeof(mosPtr));
     for (i=0; i<0x0FFF; i++) {
-        tncTable[i] = (TrapNativeCall*)tncUnimplemented;
+        tncTable[i] = tncUnimplemented;
     }
 
     // -- Initialization and Allocation

@@ -28,7 +28,7 @@
 #include <assert.h>
 
 // This is the emulated RAM.
-byte MosMem[kMosMemMax];
+byte *MosMem;
 
 /**
  Convert a mosPtr into a host memory address.
@@ -54,64 +54,77 @@ mosPtr hostToMos(void *p)
     return (mosPtr)((byte*)(p)-MosMem);
 }
 
-typedef struct MosBlock {
-    mosPtr prev;
-    mosPtr next;
-    uint size;
-    uint flags;
-} MosBlock;
+const mosPtr mosMemBlockPrev = 0;
+const mosPtr mosMemBlockNext = 4;
+const mosPtr mosMemBlockSize = 8;
+const mosPtr mosMemBlockFlags = 12;
+const mosPtr mosSizeofMemBlock = 16;
 
+const uint32_t mosMemFlagFree = 0;
+const uint32_t mosMemFlagUsed = 1;
+const uint32_t mosMemFlagHandles = 2;
+const uint32_t mosMemFlagLast = 3;
 
 void mosMemoryInit()
 {
-    memset(MosMem, 0, kMosMemMax);
-    // first block points to a last block
-    MosBlock *b = (MosBlock*)mosToHost(0x00001E00);
-    b->prev = 0;
-    b->next = 0;
-    b->size = kMosMemMax-0x1E00;
-    b->flags = 0;
+    MosMem = (byte*)calloc(kMosMemMax, 1);
+    // create a first and a last memory managing block
+    mosPtr firstBlock = 0x00001E00;
+    mosPtr lastBlock = kMosMemMax - mosSizeofMemBlock;
+    // the first block starts a list of all blocks of memory
+    mosWrite32(firstBlock+mosMemBlockPrev, 0); // no previous block
+    mosWrite32(firstBlock+mosMemBlockNext, lastBlock); // next block is the last block
+    mosWrite32(firstBlock+mosMemBlockSize, lastBlock-firstBlock-mosSizeofMemBlock); // available bytes in this block
+    mosWrite32(firstBlock+mosMemBlockFlags, mosMemFlagFree); // this space for rent
+    // the last block marks the end of managed space
+    mosWrite32(lastBlock+mosMemBlockPrev, firstBlock);
+    mosWrite32(lastBlock+mosMemBlockNext, 0);
+    mosWrite32(lastBlock+mosMemBlockSize, 0);
+    mosWrite32(lastBlock+mosMemBlockFlags, mosMemFlagLast);
 }
 
+// FIXME: this is very buggy!
 mosPtr mosMalloc(uint size)
 {
     // calculate the minimal block size we need to find
     if (size==0) return 0;
     // align with 4 bytes
-    size = (size + 3) & ~0x00000003;
-    // add room for the header of this block
-    size += 16;
+    uint32_t minimumBlockSize = ((size + 3) & ~0x00000003);
     // now run the list of blocks (could be otimized for speed)
-    MosBlock *b = (MosBlock*)mosToHost(0x00001E0);
+    mosPtr b = 0x00001E00;
     for (;;) {
-        if (b->flags==0) { // a free block
-            if (b->size==size) {
+        mosPtr next = mosRead32(b+mosMemBlockNext);
+        if (next==0) {
+            fprintf(stderr, "MOSMalloc failed: out of memory\n");
+            assert(1);
+        }
+        uint32_t flags = mosRead32(b+mosMemBlockFlags);
+        if (flags==mosMemFlagFree) { // a free block
+            uint32_t availableBlockSize = mosRead32(b+mosMemBlockSize);
+            if (availableBlockSize==minimumBlockSize) {
                 // the size matches; just mark it used and return its address
-                b->flags = 1;
-                return hostToMos(b);
-            } else if (b->size>size+20) {
-                // size is too big; split the block and return this end
-                mosPtr mb = hostToMos(b);
-                mosPtr mc = mb + size;
-                MosBlock *c = (MosBlock*)mosToHost(mc);
-                c->prev = mb;
-                c->next = b->next;
-                c->size = c->next - mc;
-                c->flags = 0;
-                b->next = mb+size;
-                b->size = size;
-                b->flags = 1;
-                return hostToMos(b);
+                mosWrite32(b+mosMemBlockFlags, mosMemFlagUsed);
+                return b+mosSizeofMemBlock;
+            } else if (availableBlockSize>minimumBlockSize+mosSizeofMemBlock) {
+                // size is bigger than needed plus room for a new block: split this block
+                mosPtr c = b + mosSizeofMemBlock + minimumBlockSize;
+                // creaste the splitting new mem block
+                mosWrite32(c+mosMemBlockPrev, b);
+                mosWrite32(c+mosMemBlockNext, next);
+                mosWrite32(c+mosMemBlockSize, next - c - mosSizeofMemBlock );
+                mosWrite32(c+mosMemBlockFlags, mosMemFlagFree);
+                // update the current mem block
+                mosWrite32(b+mosMemBlockNext, c);
+                mosWrite32(b+mosMemBlockSize, size);
+                mosWrite32(b+mosMemBlockFlags, mosMemFlagUsed);
+                // update the block after the splitting block
+                mosWrite32(next+mosMemBlockPrev, c);
+                return b+mosSizeofMemBlock;
             } else {
                 // size is too small, test the next block
             }
         }
-        if (b->next==0) {
-            fprintf(stderr, "MOSMalloc failed: out of memory\n");
-            assert(1);
-        }
-        // go to the next block
-        b = (MosBlock*)mosToHost(b->next);
+        b = next;
     }
 }
 
@@ -157,12 +170,10 @@ void mosDisposePtr(mosPtr mp)
 
 /**
  * Get the allocated size of a memory block.
- *  FIXME: 'size' should be stored as the requested size because next - this equals current 'size'
  */
 unsigned int mosPtrSize(mosPtr mp)
 {
-    MosBlock *b = (MosBlock*)mosToHost(mp);
-    return b->size-16;
+    return mosRead32(mp-mosSizeofMemBlock+mosMemBlockSize);
 }
 
 
@@ -242,6 +253,19 @@ mosHandle mosRecoverHandle(mosPtr ptr)
     return 0;
 }
 
+void mosWrite64(mosPtr addr, uintptr_t value)
+{
+    byte *d = (byte*)mosToHost(addr);
+    *d++ = value>>56;
+    *d++ = value>>48;
+    *d++ = value>>40;
+    *d++ = value>>32;
+    *d++ = value>>24;
+    *d++ = value>>16;
+    *d++ = value>>8;
+    *d++ = value>>0;
+    //*((unsigned int*)(addr)) = htonl(value);
+}
 
 /**
  * Write anywhere into allocated RAM.
@@ -255,7 +279,6 @@ void mosWriteUnsafe32(mosPtr addr, unsigned int value)
     *d++ = value>>0;
     //*((unsigned int*)(addr)) = htonl(value);
 }
-
 
 /**
  * Verify address allocation and write into RAM.
@@ -324,6 +347,20 @@ void mosWrite8(mosPtr addr, unsigned char value)
     mosWriteUnsafe8(addr, value);
 }
 
+uintptr_t mosRead64(mosPtr addr)
+{
+    uintptr_t v = 0;
+    byte *s = (byte*)mosToHost(addr);
+    v |= ((uintptr_t)(*s++))<<56;
+    v |= ((uintptr_t)(*s++))<<48;
+    v |= ((uintptr_t)(*s++))<<40;
+    v |= ((uintptr_t)(*s++))<<32;
+    v |= ((uintptr_t)(*s++))<<24;
+    v |= ((uintptr_t)(*s++))<<16;
+    v |= ((uintptr_t)(*s++))<<8;
+    v |= ((uintptr_t)(*s++))<<0;
+    return v;
+}
 
 /**
  * Read anywhere from allocated RAM.

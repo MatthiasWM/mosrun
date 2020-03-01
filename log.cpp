@@ -39,13 +39,13 @@ static int gMosVerbosity = MOS_VERBOSITY_WARN;
 
 void mosLogVerbosity(int v)
 {
-  gMosVerbosity = v;
+    gMosVerbosity = v;
 }
 
 
 int mosLogVerbosity()
 {
-  return gMosVerbosity;
+    return gMosVerbosity;
 }
 
 
@@ -54,7 +54,7 @@ int mosLogVerbosity()
  */
 FILE *mosLogFile()
 {
-  return gMosLogFile;
+    return gMosLogFile;
 }
 
 
@@ -64,15 +64,15 @@ FILE *mosLogFile()
  */
 void mosLogTo(FILE *out)
 {
-  gMosLogFile = out;
+    gMosLogFile = out;
 }
 
 
 void mosLogClose()
 {
-  if (gMosLogFile && gMosLogFile!=stdout && gMosLogFile!=stderr) {
-    fclose(gMosLogFile);
-  }
+    if (gMosLogFile && gMosLogFile!=stdout && gMosLogFile!=stderr) {
+        fclose(gMosLogFile);
+    }
 }
 
 
@@ -84,15 +84,15 @@ void mosLogClose()
  */
 void mosTrace(const char *format, ...)
 {
-  if (gMosVerbosity<MOS_VERBOSITY_TRACE)
-    return;
-  if (gMosLogFile) {
-    va_list va;
-    va_start(va, format);
-    // TODO: vsnprintf
-    vfprintf(gMosLogFile, format, va);
-    va_end(va);
-  }
+    if (gMosVerbosity<MOS_VERBOSITY_TRACE)
+        return;
+    if (gMosLogFile) {
+        va_list va;
+        va_start(va, format);
+        // TODO: vsnprintf
+        vfprintf(gMosLogFile, format, va);
+        va_end(va);
+    }
 }
 
 
@@ -103,15 +103,15 @@ void mosTrace(const char *format, ...)
  */
 void mosDebug(const char *format, ...)
 {
-  if (gMosVerbosity<MOS_VERBOSITY_DEBUG)
-    return;
-  if (gMosLogFile) {
-    va_list va;
-    va_start(va, format);
-    // TODO: vsnprintf
-    vfprintf(gMosLogFile, format, va);
-    va_end(va);
-  }
+    if (gMosVerbosity<MOS_VERBOSITY_DEBUG)
+        return;
+    if (gMosLogFile) {
+        va_list va;
+        va_start(va, format);
+        // TODO: vsnprintf
+        vfprintf(gMosLogFile, format, va);
+        va_end(va);
+    }
 }
 
 
@@ -122,66 +122,66 @@ void mosDebug(const char *format, ...)
  */
 void mosLog(const char *format, ...)
 {
-  if (gMosVerbosity<MOS_VERBOSITY_LOG)
-    return;
-  if (gMosLogFile) {
-    va_list va;
-    va_start(va, format);
-    // TODO: vsnprintf
-    vfprintf(gMosLogFile, format, va);
-    va_end(va);
-  }
+    if (gMosVerbosity<MOS_VERBOSITY_LOG)
+        return;
+    if (gMosLogFile) {
+        va_list va;
+        va_start(va, format);
+        // TODO: vsnprintf
+        vfprintf(gMosLogFile, format, va);
+        va_end(va);
+    }
 }
 
 
 /**
  * Print text to stderr about issues with the emulation.
  *
- * Log events that are important for the user, but not catastrophic for the 
+ * Log events that are important for the user, but not catastrophic for the
  * application. This is the defaul log level.
  */
 void mosWarning(const char *format, ...)
 {
-  if (gMosVerbosity<MOS_VERBOSITY_WARN)
-    return;
-  va_list va;
-  va_start(va, format);
-  fprintf(gMosLogFile, "MOSRUN - WARNING!\n");
-  vfprintf(gMosLogFile, format, va);
-  va_end(va);
-  
-  if (gMosLogFile!=stderr) {
+    if (gMosVerbosity<MOS_VERBOSITY_WARN)
+        return;
+    va_list va;
     va_start(va, format);
-    fprintf(stderr, "MOSRUN - WARNING!\n");
-    vfprintf(stderr, format, va);
+    fprintf(gMosLogFile, "MOSRUN - WARNING!\n");
+    vfprintf(gMosLogFile, format, va);
     va_end(va);
-  }
+
+    if (gMosLogFile!=stderr) {
+        va_start(va, format);
+        fprintf(stderr, "MOSRUN - WARNING!\n");
+        vfprintf(stderr, format, va);
+        va_end(va);
+    }
 }
 
 
 /**
  * Print text to stderr about severe errors in the meulation.
  *
- * Log events that will abort the application immediatly, for example 
+ * Log events that will abort the application immediatly, for example
  * unemulated traps.
  * After calling mosError, the application should safely exit.
  */
 void mosError(const char *format, ...)
 {
-  if (gMosVerbosity<MOS_VERBOSITY_ERR)
-    return;
-  va_list va;
-  va_start(va, format);
-  fprintf(gMosLogFile, "MOSRUN - ERROR!\n");
-  vfprintf(gMosLogFile, format, va);
-  va_end(va);
-  
-  if (gMosLogFile!=stderr) {
+    if (gMosVerbosity<MOS_VERBOSITY_ERR)
+        return;
+    va_list va;
     va_start(va, format);
-    fprintf(stderr, "MOSRUN - ERROR!\n");
-    vfprintf(stderr, format, va);
+    fprintf(gMosLogFile, "MOSRUN - ERROR!\n");
+    vfprintf(gMosLogFile, format, va);
     va_end(va);
-  }
+
+    if (gMosLogFile!=stderr) {
+        va_start(va, format);
+        fprintf(stderr, "MOSRUN - ERROR!\n");
+        vfprintf(stderr, format, va);
+        va_end(va);
+    }
 }
 
 void mosTraceRegisters()
