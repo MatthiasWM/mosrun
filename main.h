@@ -88,5 +88,7 @@ const unsigned int kMosTicks          = 0x016A;  // ticks since last boot (unsig
 const unsigned int kMosDeskHook       = 0x0A6C;  // hook for painting desktop (pointer)
 const unsigned int kMosMBarHeight     = 0x0BAA;  // height of menu bar (integer)
 
+void hexDump(mosPtr a, unsigned int n);
+
 
 #endif

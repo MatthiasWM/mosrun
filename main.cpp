@@ -355,11 +355,11 @@ int setupSystem(int argc, const char **argv, const char **envp)
 
     // create the file descriptor entries for stdin, stdout, and stderr
     mosPtr fdEntries = mosNewPtr(5*4*3);
+    printf("fdEntries are %08x %08x %08x\n", fdEntries+0x0000, fdEntries+0x0014, fdEntries+0x0028);
     // stdin
     mosWrite16(fdEntries+0x0000+0x0000, 1); // input
     mosWrite16(fdEntries+0x0000+0x0002, 0); // status OK
     mosWrite32(fdEntries+0x0000+0x0004, ioGlue+0x0000); // FSYS
-    //mosWrite32(fdEntries+0x0000+0x0008, (unsigned int)(&stdFiles[0])); // back to host environment
     mosWrite32(fdEntries+0x0000+0x0008, 0); // back to host environment (index into file registry)
     mosWrite32(fdEntries+0x0000+0x000C, 0); // transfer size
     mosWrite32(fdEntries+0x0000+0x0010, 0); // transfer buffer address
@@ -367,16 +367,14 @@ int setupSystem(int argc, const char **argv, const char **envp)
     mosWrite16(fdEntries+0x0014+0x0000, 2); // output
     mosWrite16(fdEntries+0x0014+0x0002, 0); // status OK
     mosWrite32(fdEntries+0x0014+0x0004, ioGlue+0x0000); // FSYS
-    //mosWrite32(fdEntries+0x0014+0x0008, (unsigned int)(&stdFiles[1])); // back to host environment
-    mosWrite32(fdEntries+0x0000+0x0008, 1); // back to host environment (index into file registry)
+    mosWrite32(fdEntries+0x0014+0x0008, 1); // back to host environment (index into file registry)
     mosWrite32(fdEntries+0x0014+0x000C, 0); // transfer size
     mosWrite32(fdEntries+0x0014+0x0010, 0); // transfer buffer address
     // stderr
     mosWrite16(fdEntries+0x0028+0x0000, 2); // output
     mosWrite16(fdEntries+0x0028+0x0002, 0); // status OK
     mosWrite32(fdEntries+0x0028+0x0004, ioGlue+0x0000); // FSYS
-    //mosWrite32(fdEntries+0x0028+0x0008, (unsigned int)(&stdFiles[2])); // back to host environment
-    mosWrite32(fdEntries+0x0000+0x0008, 2); // back to host environment (index into file registry)
+    mosWrite32(fdEntries+0x0028+0x0008, 2); // back to host environment (index into file registry)
     mosWrite32(fdEntries+0x0028+0x000C, 0); // transfer size
     mosWrite32(fdEntries+0x0028+0x0010, 0); // transfer buffer address
 
@@ -519,6 +517,7 @@ void setBreakpoints()
  */
 int main(int argc, const char **argv, const char **envp)
 {
+    //mosLogVerbosity(MOS_VERBOSITY_TRACE);
     mosMemoryInit();
 #ifdef MOS_UNITTESTS
     mosMemoryUnittests();

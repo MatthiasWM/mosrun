@@ -128,9 +128,39 @@ mosPtr mosMalloc(uint size)
     }
 }
 
+void mosJoinBlocks(mosPtr b)
+{
+    if (!b) return;
+    mosPtr c = mosRead32(b+mosMemBlockNext);
+    if (!c) return;
+    uint32_t bFlags = mosRead32(b+mosMemBlockFlags);
+    if (bFlags!=mosMemFlagFree) return;
+    uint32_t cFlags = mosRead32(c+mosMemBlockFlags);
+    if (cFlags!=mosMemFlagFree) return;
+    mosPtr d = mosRead32(c+mosMemBlockNext);
+    if (!d) return;
+    // ok, so both blocks exist, are connected, and are free
+    mosWrite32(d+mosMemBlockPrev, b);
+    mosWrite32(b+mosMemBlockNext, d);
+    mosWrite32(b+mosMemBlockSize, d-b-mosSizeofMemBlock);
+}
+
 void mosFree(mosPtr addr)
 {
-    // TODO: implement me!
+    mosPtr b = addr - mosSizeofMemBlock;
+    mosPtr next = mosRead32(b+mosMemBlockNext);
+    uint32_t flags = mosRead32(b+mosMemBlockFlags);
+    if (flags!=mosMemFlagUsed) {
+        assert(1);
+        // something went terribly wrong!
+    }
+    mosWrite32(b+mosMemBlockFlags, mosMemFlagFree);
+    mosWrite32(b+mosMemBlockSize, next-b-mosSizeofMemBlock);
+    // optimize: if the next block is free, join both blocks
+    mosJoinBlocks(addr);
+    // optimize: if the previous block is free, join both blocks
+    mosPtr prev = mosRead32(b+mosMemBlockPrev);
+    mosJoinBlocks(prev);
 }
 
 

@@ -229,6 +229,7 @@ void trapSyWrite(uint16_t) {
  */
 void trapSyIoctl(uint16_t) {
     unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
+    // for stdio, this points into the fdEntries array
     unsigned int file = m68k_read_memory_32(sp+4);
     unsigned int cmd = m68k_read_memory_32(sp+8);
     unsigned int param = m68k_read_memory_32(sp+12);
@@ -259,26 +260,25 @@ void trapSyIoctl(uint16_t) {
             }
             break; }
         case 0x6601: // FIODUPFD
-            // TODO: more error checking
-            // param is 0 in my tests
-            // file is the current fd
-            // TODO: I do not know what we must return here! Do I need to write the code to allocate a new fileStruct? Probably not!
-            m68k_set_reg(M68K_REG_D0, 0); // no error
+            // For MPW, this call increments the number of 'open' calls on
+            // the stdin etc., so that nobody else closes these file.
+            // Normally, this returns a new file descriptor, but since we don't
+            // plan to implement multithreading, we can just return the same FD.
+            m68k_set_reg(M68K_REG_D0, ix);
             break;
         case 0x6602: // FIOINTERACTIVE, return if device is interactive
-            // TODO: more error checking
-            m68k_set_reg(M68K_REG_D0, 0); // no error
+            m68k_set_reg(M68K_REG_D0, isatty(mosFile->fd));
             break;
         case 0x6603: // FIOBUFSIZE, Return optimal buffer size (MPW buffers 1024 bytes)
             m68k_write_memory_16(param+2, 4096); // random value // FIXME: this looks like the wrong address to me!
-            m68k_set_reg(M68K_REG_D0, 0); // no error
+            m68k_set_reg(M68K_REG_D0, mosNoErr); // no error
             break;
         case 0x6604: // FIOFNAME, Return filename
         case 0x6605: // FIOREFNUM, Return fs refnum
         case 0x6606: // FIOSETEOF, Set file length
         default:
             mosError("trapSyIoctl: unsupported ioctl 0x%04X on file operation\n", cmd);
-            m68k_set_reg(M68K_REG_D0, EINVAL);
+            m68k_set_reg(M68K_REG_D0, -1);
             break;
     }
 }
@@ -448,7 +448,7 @@ int mosPBSetFPos(mosPtr paramBlock, bool)
  Classic Trap subfunction to read bytes from a file.
 
  \param paramBlock more information for this call
- * +24.s ioRef, Unix file descriptor // FIXME: which may not fit into 16 bits!
+ * +24.s ioRef, Unix file descriptor // FIXME: which may not fit into 16 bits! See: getdtablesize
  * +32.l pointer to bytes to be read
  * +36.l number of bytes to read
  * +44.s position mode as in lseek()
@@ -623,6 +623,18 @@ int mosPBCreate(mosPtr paramBlock, bool)
  */
 int mosPBHOpen(mosPtr paramBlock, bool)
 {
+    /*
+    QElemPtr qLink; // 0
+    short qType; // 4
+    short ioTrap; // 6
+    Ptr ioCmdAddr; // 8
+    ProcPtr ioCompletion; //12
+    OSErr ioResult; // 16
+    StringPtr ioNamePtr; // 18
+    short ioVRefNum; // 22
+struct IOParam { ...
+struct FileParam { ...
+     */
     mosDebug("mosPBHOpen called\n");
 
     //mosPtr ioCompletion = m68k_read_memory_32(paramBlock+12);
