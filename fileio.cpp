@@ -239,8 +239,8 @@ void trapSyIoctl(uint16_t) {
              file, cmd, (cmd>>8)&0xff, cmd&0xff, param, param);
     switch (cmd) {
         case 0x6600: { // FIOLSEEK
-            // Parameter points to two longs, the first is the offset type, the second is the offset itself
-            // SEEK_SET=0 SEEK_CUR=1 SEEK_END=2
+            // Parameter points to two longs, the first is the offset type,
+            // the second is the offset itself.
             // lseek returns -1 on fail and the previous position on success
             // ioctl return erroro in D0, and result in A6-4 (where the offset was originally)
             // TODO: more error checking
@@ -253,6 +253,7 @@ void trapSyIoctl(uint16_t) {
             }
             int ret = (unsigned int)lseek(mosFile->fd, offset, whence);
             if (ret==-1) {
+                m68k_write_memory_32(param+4, -1);
                 m68k_set_reg(M68K_REG_D0, errno);
             } else {
                 m68k_write_memory_32(param+4, ret);
@@ -270,8 +271,9 @@ void trapSyIoctl(uint16_t) {
             m68k_set_reg(M68K_REG_D0, isatty(mosFile->fd));
             break;
         case 0x6603: // FIOBUFSIZE, Return optimal buffer size (MPW buffers 1024 bytes)
-            m68k_write_memory_16(param+2, 4096); // random value // FIXME: this looks like the wrong address to me!
-            m68k_set_reg(M68K_REG_D0, mosNoErr); // no error
+            if (param)
+                m68k_write_memory_16(param+2, 1024); // random value
+            m68k_set_reg(M68K_REG_D0, 1024); // no error
             break;
         case 0x6604: // FIOFNAME, Return filename
         case 0x6605: // FIOREFNUM, Return fs refnum

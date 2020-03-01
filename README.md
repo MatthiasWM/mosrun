@@ -7,22 +7,14 @@ mosrun
 Note
 ----
 
-mosrun was designed as a 32 bit executable. This is an effort to port mosrun
-to 64 bit, as required by macOS and soon all new operating systems.
+mosrun was designed as a 32 bit executable. It was ported to 64 bit in
+February 2020. Only a few apps were tested and there are sure to be a
+bunch of bugs and tons of inefficiencies. mosrun seems to be stable
+enough though to run the typical jobs fro developing Newton OS code
+as intended.
 
-Mamory allocation and perticularly freeing memory is not yet implemented
-all the way.
-
-At this point, mosrun compiles and links and runs the embedded code. The
-FileIO functions for duplicating file descriptors and testing if a file
-descriptor points a terminal need to be implemented.
-
-Everything must be throughly tested still.
-
-If you want the original mosrun code, go to
+The original 32 bit mosrun code is located at:
 https://github.com/MatthiasWM/dynee5/tree/master/Alienate/mosrun
-
-This mesaage will be remove as soon as morun executes in 64 bit systems.
 
 
 About

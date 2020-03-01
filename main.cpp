@@ -355,7 +355,6 @@ int setupSystem(int argc, const char **argv, const char **envp)
 
     // create the file descriptor entries for stdin, stdout, and stderr
     mosPtr fdEntries = mosNewPtr(5*4*3);
-    printf("fdEntries are %08x %08x %08x\n", fdEntries+0x0000, fdEntries+0x0014, fdEntries+0x0028);
     // stdin
     mosWrite16(fdEntries+0x0000+0x0000, 1); // input
     mosWrite16(fdEntries+0x0000+0x0002, 0); // status OK
