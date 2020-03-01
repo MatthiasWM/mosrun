@@ -38,22 +38,22 @@ typedef struct
 extern MosFile stdFiles[];
 
 
-void trapSyFAccess(unsigned short);
-void trapSyClose(unsigned short);
-void trapSyRead(unsigned short);
-void trapSyWrite(unsigned short);
-void trapSyIoctl(unsigned short);
+void trapSyFAccess(uint16_t);
+void trapSyClose(uint16_t);
+void trapSyRead(uint16_t);
+void trapSyWrite(uint16_t);
+void trapSyIoctl(uint16_t);
 
-int mosPBGetFInfo(unsigned int paramBlock, bool async);
-int mosPBSetFInfo(unsigned int paramBlock, bool async);
-int mosPBCreate(unsigned int paramBlock, bool async);
-int mosPBSetEOF(unsigned int paramBlock, bool async);
-int mosPBSetFPos(unsigned int paramBlock, bool async);
-int mosPBRead(unsigned int paramBlock, bool async);
-int mosPBWrite(unsigned int paramBlock, bool async);
-int mosPBClose(unsigned int paramBlock, bool async);
-int mosPBHOpen(unsigned int paramBlock, bool async);
-int mosPBDelete(unsigned int paramBlock, bool async);
-int mosFSDispatch(unsigned int paramBlock, unsigned int func);
+int mosPBGetFInfo(mosPtr paramBlock, bool async);
+int mosPBSetFInfo(mosPtr paramBlock, bool async);
+int mosPBCreate(mosPtr paramBlock, bool async);
+int mosPBSetEOF(mosPtr paramBlock, bool async);
+int mosPBSetFPos(mosPtr paramBlock, bool async);
+int mosPBRead(mosPtr paramBlock, bool async);
+int mosPBWrite(mosPtr paramBlock, bool async);
+int mosPBClose(mosPtr paramBlock, bool async);
+int mosPBHOpen(mosPtr paramBlock, bool async);
+int mosPBDelete(mosPtr paramBlock, bool async);
+int mosFSDispatch(mosPtr paramBlock, uint32_t func);
 
 #endif /* defined(__mosrun__fileio__) */

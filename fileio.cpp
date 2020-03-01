@@ -34,15 +34,17 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include <vector>
+
 extern "C" {
 #include "musashi331/m68k.h"
 }
 
 
-MosFile stdFiles[] = {
-    { STDIN_FILENO,  "/dev/stdin", true, false },
-    { STDOUT_FILENO, "/dev/stdout", true, false },
-    { STDERR_FILENO, "/dev/stderr", true, false }
+std::vector<MosFile*> mosFileRegistry = {
+    new MosFile{ STDIN_FILENO,  "/dev/stdin", true, false },
+    new MosFile{ STDOUT_FILENO, "/dev/stdout", true, false },
+    new MosFile{ STDERR_FILENO, "/dev/stderr", true, false }
 };
 
 
@@ -76,7 +78,7 @@ MosFile stdFiles[] = {
  *   +08.l = command
  *   +0c.l = ptr to return value?
  */
-void trapSyFAccess(unsigned short) {
+void trapSyFAccess(uint16_t) {
     unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
     const char *filename = (char*)mosToHost(m68k_read_memory_32(sp+4));
     unsigned int cmd = m68k_read_memory_32(sp+8);
@@ -117,13 +119,8 @@ void trapSyFAccess(unsigned short) {
         m68k_set_reg(M68K_REG_D0, errno); // just return the error code
         free(uxFilename);
     } else {
-        // FIXME: MosFile must be a mos object
-        MosFile *mf = (MosFile*)calloc(1, sizeof(MosFile));
-        m68k_write_memory_32(file+8, (unsigned int)mf);
-        mf->fd = fd;
-        mf->filename = uxFilename;
-        mf->open = true;
-        mf->allocated = true;
+        m68k_write_memory_32(file+8, mosFileRegistry.size());
+        mosFileRegistry.push_back(new MosFile{fd, uxFilename, true, true});
         m68k_set_reg(M68K_REG_D0, 0); // no error
     }
 }
@@ -132,10 +129,11 @@ void trapSyFAccess(unsigned short) {
 /**
  * Close a file using its file descriptor.
  */
-void trapSyClose(unsigned short) {
+void trapSyClose(uint16_t) {
     unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
     unsigned int file = m68k_read_memory_32(sp+4);
-    MosFile *mosFile = (MosFile*)m68k_read_memory_32(file+8);
+    uint32_t ix = m68k_read_memory_32(file+8);
+    MosFile *mosFile = mosFileRegistry.at(ix);
     int ret = close(mosFile->fd);
     if (ret==-1) {
         m68k_set_reg(M68K_REG_D0, errno);
@@ -143,6 +141,7 @@ void trapSyClose(unsigned short) {
         m68k_set_reg(M68K_REG_D0, 0);
     }
     if (mosFile->allocated) {
+        mosFileRegistry.at(ix) = nullptr;
         m68k_write_memory_32(file+8, 0);
         if (mosFile->filename) {
             free((char*)mosFile->filename);
@@ -155,12 +154,13 @@ void trapSyClose(unsigned short) {
 /**
  * Read data from a file or stream.
  */
-void trapSyRead(unsigned short) {
+void trapSyRead(uint16_t) {
     // file identifier is on the stack
     unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
     unsigned int file = m68k_read_memory_32(sp+4);
-    MosFile *mosFile = (MosFile*)m68k_read_memory_32(file+8);
-    void *buffer = (void*)m68k_read_memory_32(file+16);
+    uint32_t ix = m68k_read_memory_32(file+8);
+    MosFile *mosFile = mosFileRegistry.at(ix);
+    void *buffer = mosToHost(m68k_read_memory_32(file+16));
     unsigned int size = m68k_read_memory_32(file+12);
     int ret = read(mosFile->fd, buffer, size);
     if (ret==-1) {
@@ -175,11 +175,12 @@ void trapSyRead(unsigned short) {
 /**
  * Write data to a file or stream.
  */
-void trapSyWrite(unsigned short) {
+void trapSyWrite(uint16_t) {
     unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
     unsigned int file = m68k_read_memory_32(sp+4);
-    MosFile *mosFile = (MosFile*)m68k_read_memory_32(file+8);
-    void *buffer = (void*)m68k_read_memory_32(file+16);
+    uint32_t ix = m68k_read_memory_32(file+8);
+    MosFile *mosFile = mosFileRegistry.at(ix);
+    void *buffer = mosToHost(m68k_read_memory_32(file+16));
     unsigned int size = m68k_read_memory_32(file+12);
 
     // convert buffer if it is not binary // FIXME: this needs a lot more work!
@@ -224,12 +225,13 @@ void trapSyWrite(unsigned short) {
 /**
  * Additional file management functions.
  */
-void trapSyIoctl(unsigned short) {
+void trapSyIoctl(uint16_t) {
     unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
     unsigned int file = m68k_read_memory_32(sp+4);
     unsigned int cmd = m68k_read_memory_32(sp+8);
     unsigned int param = m68k_read_memory_32(sp+12);
-    MosFile *mosFile = (MosFile*)m68k_read_memory_32(file+8);
+    uint32_t ix = m68k_read_memory_32(file+8);
+    MosFile *mosFile = mosFileRegistry.at(ix);
     mosTrace("IOCTL of file at 0x%08X, cmd=0x%04X = '%c'<<8+%d, param=%d (0x%08X)\n",
              file, cmd, (cmd>>8)&0xff, cmd&0xff, param, param);
     switch (cmd) {
@@ -280,7 +282,13 @@ void trapSyIoctl(unsigned short) {
 }
 
 
-int mosPBGetFInfo(unsigned int paramBlock, bool async)
+/**
+ Classic Trap subfunction to get information about a file.
+
+ \param paramBlock more information for this call
+ \return Classic error code
+ */
+int mosPBGetFInfo(mosPtr paramBlock, bool)
 {
     mosDebug("mosPBGetFInfo called\n");
 
@@ -305,7 +313,7 @@ int mosPBGetFInfo(unsigned int paramBlock, bool async)
     }
 
     char cFilename[2048];
-    memcpy(cFilename, (unsigned char*)ioNamePtr+1, fnLen);
+    memcpy(cFilename, mosToHost(ioNamePtr+1), fnLen);
     cFilename[fnLen] = 0;
     mosDebug("mosPBGetFInfo: get info for '%s'\n", cFilename);
 
@@ -355,7 +363,13 @@ int mosPBGetFInfo(unsigned int paramBlock, bool async)
 }
 
 
-int mosPBSetFInfo(unsigned int paramBlock, bool async)
+/**
+ Classic Trap subfunction to set some information for a file.
+
+ \param paramBlock more information for this call
+ \return Classic error code
+ */
+int mosPBSetFInfo(mosPtr paramBlock, bool)
 {
     mosDebug("mosPBSetFInfo called\n");
     // FIXME: what can the user set here?
@@ -364,12 +378,20 @@ int mosPBSetFInfo(unsigned int paramBlock, bool async)
     return mosNoErr; // .. and check which fields are read
 }
 
+/**
+ Classic Trap subfunction to set the size of a file.
 
-int mosPBSetEOF(unsigned int paramBlock, bool async)
+ \param paramBlock more information for this call
+ * +24.s ioRef, Unix file descriptor // FIXME: which may not fit into 16 bits!
+ * +28.l requested size of file
+ * +16.s [out] more error information
+ \return Classic error code
+ */
+int mosPBSetEOF(mosPtr paramBlock, bool)
 {
     mosDebug("mosPBSetEOF called\n");
     int ioRefNum = m68k_read_memory_16(paramBlock+24);
-    unsigned int ioMisc = m68k_read_memory_32(paramBlock+28);
+    uint32_t ioMisc = m68k_read_memory_32(paramBlock+28);
 
     int ret = ftruncate(ioRefNum, ioMisc);
     if (ret==-1) {
@@ -382,12 +404,23 @@ int mosPBSetEOF(unsigned int paramBlock, bool async)
     return mosNoErr; // .. and check which fields are read
 }
 
+/**
+ Classic Trap subfunction to seek a position within a file.
 
-int mosPBSetFPos(unsigned int paramBlock, bool async)
+ \param paramBlock more information for this call
+ * +24.s ioRef, Unix file descriptor // FIXME: which may not fit into 16 bits!
+ * +44.s position mode as in lseek()
+ * +46.l offset into file
+ * +40.l [out] return code
+ * +46.l [out] current position in file  // FIXME: should this be written back
+ * +16.s [out] more error information
+ \return Classic error code
+ */
+int mosPBSetFPos(mosPtr paramBlock, bool)
 {
     int ioRefNum = m68k_read_memory_16(paramBlock+24);
-    unsigned short ioPosMode = m68k_read_memory_16(paramBlock+44);
-    unsigned int ioPosOffset = m68k_read_memory_32(paramBlock+46);
+    uint16_t ioPosMode = m68k_read_memory_16(paramBlock+44);
+    uint32_t ioPosOffset = m68k_read_memory_32(paramBlock+46); // FIXME: this should probably be signed
     mosDebug("mosPBSetFPos called: RefNum=%d, PosMode=%d, PosOffset=%d\n",
              ioRefNum, ioPosMode, ioPosOffset);
 
@@ -398,6 +431,7 @@ int mosPBSetFPos(unsigned int paramBlock, bool async)
         case 2: ret = (int)lseek(ioRefNum, ioPosOffset, SEEK_END); break; // fsFromLEOF
         case 3: ret = (int)lseek(ioRefNum, ioPosOffset, SEEK_CUR); break; // fsFromMark
     }
+    // FIXME: is the position we found not written back?
     if (ret==-1) {
         mosDebug("mosPBSetFPos failed: %s\n", strerror(errno));
         m68k_write_memory_16(paramBlock+16, mosEofErr);
@@ -408,14 +442,27 @@ int mosPBSetFPos(unsigned int paramBlock, bool async)
     return mosNoErr; // .. and check which fields are read
 }
 
+/**
+ Classic Trap subfunction to read bytes from a file.
 
-int mosPBRead(unsigned int paramBlock, bool async)
+ \param paramBlock more information for this call
+ * +24.s ioRef, Unix file descriptor // FIXME: which may not fit into 16 bits!
+ * +32.l pointer to bytes to be read
+ * +36.l number of bytes to read
+ * +44.s position mode as in lseek()
+ * +46.l offset into file
+ * +40.l [out] return code
+ * +46.l [out] current position in file
+ * +16.s [out] more error information
+ \return Classic error code
+ */
+int mosPBRead(mosPtr paramBlock, bool)
 {
     int ioRefNum = m68k_read_memory_16(paramBlock+24);
-    unsigned int ioBuffer = m68k_read_memory_32(paramBlock+32);
-    unsigned int ioReqCount = m68k_read_memory_32(paramBlock+36);
-    unsigned short ioPosMode = m68k_read_memory_16(paramBlock+44);
-    unsigned int ioPosOffset = m68k_read_memory_32(paramBlock+46);
+    mosPtr ioBuffer = m68k_read_memory_32(paramBlock+32);
+    uint32_t ioReqCount = m68k_read_memory_32(paramBlock+36);
+    uint16_t ioPosMode = m68k_read_memory_16(paramBlock+44);
+    uint32_t ioPosOffset = m68k_read_memory_32(paramBlock+46); // FIXME: should be signed?
     mosDebug("mosPBRead called: RefNum=%d, Buffer=0x%08X, ReqCount=%d, POsMode=%d, PosOffset=%d\n",
              ioRefNum, ioBuffer, ioReqCount, ioPosMode, ioPosOffset);
 
@@ -425,7 +472,8 @@ int mosPBRead(unsigned int paramBlock, bool async)
         case 2: lseek(ioRefNum, ioPosOffset, SEEK_END); break;
         case 3: lseek(ioRefNum, ioPosOffset, SEEK_CUR); break;
     }
-    int ret = read(ioRefNum, (void*)ioBuffer, ioReqCount);
+    int ret = read(ioRefNum, mosToHost(ioBuffer), ioReqCount);
+    m68k_write_memory_32(paramBlock+46, (unsigned int)lseek(ioRefNum, 0, SEEK_CUR));
     if (ret==-1) {
         mosDebug("mosPBRead failed: %s\n", strerror(errno));
         m68k_write_memory_16(paramBlock+16, mosFnfErr);
@@ -433,19 +481,31 @@ int mosPBRead(unsigned int paramBlock, bool async)
     }
 
     m68k_write_memory_32(paramBlock+40, ret);
-    m68k_write_memory_32(paramBlock+46, (unsigned int)lseek(ioRefNum, 0, SEEK_CUR));
     m68k_write_memory_16(paramBlock+16, mosNoErr);
     return mosNoErr; // .. and check which fields are read
 }
 
+/**
+ Classic Trap subfunction to write bytes to a file.
 
-int mosPBWrite(unsigned int paramBlock, bool async)
+ \param paramBlock more information for this call
+ * +24.s ioRef, Unix file descriptor // FIXME: which may not fit into 16 bits!
+ * +32.l pointer to bytes to be written
+ * +36.l number of bytes to write
+ * +44.s position mode as in lseek()
+ * +46.l offset into file
+ * +40.l [out] return code
+ * +46.l [out] current position in file
+ * +16.s [out] more error information
+ \return Classic error code
+ */
+int mosPBWrite(mosPtr paramBlock, bool)
 {
     int ioRefNum = m68k_read_memory_16(paramBlock+24);
-    unsigned int ioBuffer = m68k_read_memory_32(paramBlock+32);
-    unsigned int ioReqCount = m68k_read_memory_32(paramBlock+36);
-    unsigned short ioPosMode = m68k_read_memory_16(paramBlock+44);
-    unsigned int ioPosOffset = m68k_read_memory_32(paramBlock+46);
+    mosPtr ioBuffer = m68k_read_memory_32(paramBlock+32);
+    uint32_t ioReqCount = m68k_read_memory_32(paramBlock+36);
+    uint16_t ioPosMode = m68k_read_memory_16(paramBlock+44);
+    uint32_t ioPosOffset = m68k_read_memory_32(paramBlock+46); // FIXME: should be signed?
     mosDebug("mosPBWrite called: RefNum=%d, Buffer=0x%08X, ReqCount=%d, POsMode=%d, PosOffset=%d\n",
              ioRefNum, ioBuffer, ioReqCount, ioPosMode, ioPosOffset);
 
@@ -455,7 +515,8 @@ int mosPBWrite(unsigned int paramBlock, bool async)
         case 2: lseek(ioRefNum, ioPosOffset, SEEK_END); break;
         case 3: lseek(ioRefNum, ioPosOffset, SEEK_CUR); break;
     }
-    int ret = write(ioRefNum, (void*)ioBuffer, ioReqCount);
+    int ret = write(ioRefNum, mosToHost(ioBuffer), ioReqCount);
+    m68k_write_memory_32(paramBlock+46, (uint32_t)lseek(ioRefNum, 0, SEEK_CUR));
     if (ret==-1) {
         mosDebug("mosPBWrite failed: %s\n", strerror(errno));
         m68k_write_memory_16(paramBlock+16, mosFnfErr);
@@ -463,13 +524,20 @@ int mosPBWrite(unsigned int paramBlock, bool async)
     }
 
     m68k_write_memory_32(paramBlock+40, ret);
-    m68k_write_memory_32(paramBlock+46, (unsigned int)lseek(ioRefNum, 0, SEEK_CUR));
     m68k_write_memory_16(paramBlock+16, mosNoErr);
     return mosNoErr; // .. and check which fields are read
 }
 
 
-int mosPBClose(unsigned int paramBlock, bool async)
+/**
+ Classic Trap subfunction to close a file on disk.
+
+ \param paramBlock more information for this call
+ * +24.s ioRef, Unix file descriptor // FIXME: which may not fit into 16 bits!
+ * +16.s [out] more error codes
+ \return Classic error code
+ */
+int mosPBClose(mosPtr paramBlock, bool)
 {
     mosDebug("mosPBClose called\n");
     int ioRefNum = m68k_read_memory_16(paramBlock+24);
@@ -485,8 +553,20 @@ int mosPBClose(unsigned int paramBlock, bool async)
     return mosNoErr; // .. and check which fields are read
 }
 
+/**
+ Classic Trap subfunction to create a new file on disk.
 
-int mosPBCreate(unsigned int paramBlock, bool async)
+ This does not keep the file open!
+
+ \param paramBlock more information for this call
+ * +12.w for async calls, call this when complete (not supported)
+ * +18.w pointer to PStr filename of file to be deleted
+ * +22.s VRef (not supported)
+ * +26.b FVers (not supported)
+ * +16.s [out] more error codes
+ \return Classic error code
+ */
+int mosPBCreate(mosPtr paramBlock, bool)
 {
     mosDebug("mosPBCreate called\n");
 
@@ -502,15 +582,15 @@ int mosPBCreate(unsigned int paramBlock, bool async)
         return mosBdNamErr;
     }
 
-    unsigned int fnLen = m68k_read_memory_8(ioNamePtr);
+    uint8_t fnLen = m68k_read_memory_8(ioNamePtr);
     if (fnLen==0) {
         mosDebug("mosPBCreate: zero length file name\n");
         m68k_write_memory_16(paramBlock+16, mosBdNamErr);
         return mosBdNamErr;
     }
 
-    char cFilename[2048];
-    memcpy(cFilename, (unsigned char*)ioNamePtr+1, fnLen);
+    char cFilename[1024];
+    memcpy(cFilename, mosToHost(ioNamePtr+1), fnLen);
     cFilename[fnLen] = 0;
     mosDebug("mosPBCreate: create file '%s'\n", cFilename);
 
@@ -526,8 +606,20 @@ int mosPBCreate(unsigned int paramBlock, bool async)
     return mosNoErr;
 }
 
+/**
+ Classic Trap subfunction to open a file on disk.
 
-int mosPBHOpen(unsigned int paramBlock, bool async)
+ \param paramBlock more information for this call
+ * +12.w for async calls, call this when complete (not supported)
+ * +18.w pointer to PStr filename of file to be deleted
+ * +22.s VRef (not supported)
+ * +26.b FVers (not supported)
+ * +27.b mode
+ * +16.s [out] more error codes
+ * +24.s [out] file descriptor   FIXME: Unix file descriptor may not fit into 16 bit!
+ \return Classic error code
+ */
+int mosPBHOpen(mosPtr paramBlock, bool)
 {
     mosDebug("mosPBHOpen called\n");
 
@@ -543,20 +635,20 @@ int mosPBHOpen(unsigned int paramBlock, bool async)
         return mosBdNamErr;
     }
 
-    unsigned int fnLen = m68k_read_memory_8(ioNamePtr);
+    uint8_t fnLen = m68k_read_memory_8(ioNamePtr);
     if (fnLen==0) {
         mosDebug("mosPBHOpen: zero length file name\n");
         m68k_write_memory_16(paramBlock+16, mosBdNamErr);
         return mosBdNamErr;
     }
 
-    char cFilename[2048];
-    memcpy(cFilename, (unsigned char*)ioNamePtr+1, fnLen);
+    char cFilename[1024];
+    memcpy(cFilename, mosToHost(ioNamePtr+1), fnLen);
     cFilename[fnLen] = 0;
     mosDebug("mosPBHOpen: open file '%s'\n", cFilename);
 
     int file = -1;
-    byte mode = m68k_read_memory_8(paramBlock+27); // ioPermssn
+    uint8_t mode = m68k_read_memory_8(paramBlock+27); // ioPermssn
     switch (mode) {
         case 1: file = open(cFilename, O_RDONLY); break;  // fsRdPerm = 1
         case 2: file = open(cFilename, O_WRONLY); break;  // fsWrPern = 2
@@ -569,13 +661,24 @@ int mosPBHOpen(unsigned int paramBlock, bool async)
         m68k_write_memory_16(paramBlock+16, mosDupFNErr);
         return mosDupFNErr; // TODO: we could differentiate here a lot more!
     }
-    m68k_write_memory_16(paramBlock+24, file); // ioRefNum
+    m68k_write_memory_16(paramBlock+24, file); // FIXME: it's not guaranteed that 'file' will fit into 16 bits! ioRefNum
     m68k_write_memory_16(paramBlock+16, mosNoErr);
     return mosNoErr;
 }
 
 
-int mosPBDelete(unsigned int paramBlock, bool async)
+/**
+ Classic Trap subfunction to delete a file from disk.
+
+ \param paramBlock more information for this call
+    * +12.w for async calls, call this when complete (not supported)
+    * +18.w pointer to PStr filename of file to be deleted
+    * +22.s VRef (not supported)
+    * +26.b FVers (not supported)
+    * +16.s [out] more error codes
+ \return Classic error code
+ */
+int mosPBDelete(mosPtr paramBlock, bool)
 {
     mosDebug("mosPBDelete called\n");
 
@@ -591,15 +694,15 @@ int mosPBDelete(unsigned int paramBlock, bool async)
         return mosBdNamErr;
     }
 
-    unsigned int fnLen = m68k_read_memory_8(ioNamePtr);
+    uint8_t fnLen = m68k_read_memory_8(ioNamePtr);
     if (fnLen==0) {
         mosDebug("mosPBDelete: zero length file name\n");
         m68k_write_memory_16(paramBlock+16, mosBdNamErr);
         return mosBdNamErr;
     }
 
-    char cFilename[2048];
-    memcpy(cFilename, (unsigned char*)ioNamePtr+1, fnLen);
+    char cFilename[1024];
+    memcpy(cFilename, mosToHost(ioNamePtr+1), fnLen);
     cFilename[fnLen] = 0;
 
     mosDebug("mosPBDelete: deleteing file '%s'\n", cFilename);
@@ -616,9 +719,15 @@ int mosPBDelete(unsigned int paramBlock, bool async)
 
 
 /**
- * Dispatch a single trap into multiple file system operations
+ * Dispatch a single trap into multiple file system operations.
+ *
+ * This is done using the Classic Trap command. Register A0 points at the parameter block.
+ * The bottom 16 bit of D0 encode the function ID within this Trap ID.
+ *
+ * \param paramBlock points to a block containing more information around this call
+ * \param func the ID  of the function that the trap wants to call
  */
-int mosFSDispatch(unsigned int paramBlock, unsigned int func)
+int mosFSDispatch(mosPtr paramBlock, uint32_t func)
 {
     switch (func) {
         case 0x001A: // PBOpenDFSync
