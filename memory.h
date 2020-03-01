@@ -25,6 +25,13 @@
 
 #include "main.h"
 
+extern byte MosMem[];
+
+void mosMemoryInit();
+
+void *mosToHost(mosPtr);
+mosPtr hostToMos(void*);
+
 void mosWrite32(mosPtr addr, unsigned int value);
 void mosWrite16(mosPtr addr, unsigned short value);
 void mosWrite8(mosPtr addr, unsigned char value);

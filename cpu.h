@@ -17,6 +17,8 @@
  
  The author can be contacted at mosrun AT matthiasm DOT com.
  The latest source code can be found at http://code.google.com/p/dynee5/
+
+ This code is 64 bit safe.
  */
 
 #ifndef mosrun_cpu_h
@@ -26,7 +28,7 @@
 
 
 extern "C" {
-  void m68k_instruction_hook();
+void m68k_instruction_hook();
 }
 
 

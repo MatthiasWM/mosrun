@@ -2,23 +2,24 @@ cmake_minimum_required (VERSION 2.6)
 project (mosrun)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 source_group("Source Files\\musashi331" REGULAR_EXPRESSION "musashi331/*")
 
 add_executable(mosrun
-    ./names.cpp
-    ./main.cpp
-    ./log.cpp
-    ./memory.cpp
-    ./breakpoints.cpp
-    ./fileio.cpp
-    ./resourcefork.cpp
-    ./cpu.cpp
-    ./rsrc.cpp
-    ./traps.cpp
-    ./filename.cpp
-    ./systemram.cpp
-    ./MosResource.cpp
+    names.cpp names.h
+    main.cpp main.h
+    log.cpp log.h
+    memory.cpp memory.h
+    breakpoints.cpp breakpoints.h
+    fileio.cpp fileio.h
+    resourcefork.cpp resourcefork.h
+    cpu.cpp cpu.h
+    rsrc.cpp rsrc.h
+    traps.cpp traps.h
+    filename.cpp filename.h
+    systemram.cpp systemram.h
     ./musashi331/m68kops.c
     ./musashi331/m68kopac.c
     ./musashi331/m68kopnz.c
@@ -27,6 +28,7 @@ add_executable(mosrun
     ./musashi331/m68kopdm.c
     )
 install(TARGETS mosrun RUNTIME DESTINATION bin)
+
 
 add_executable(mosmake
     ./mosmake/mosmake.cpp

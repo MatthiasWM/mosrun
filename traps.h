@@ -24,7 +24,7 @@
 
 #include "main.h"
 
-extern unsigned short gCurrentTrap;
+extern uint16_t gCurrentTrap;
 extern unsigned int trapDispatchTrap;
 extern unsigned int trapExitApp;
 

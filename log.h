@@ -43,6 +43,7 @@ void mosDebug(const char *format, ...);
 void mosLog(const char *format, ...);
 void mosWarning(const char *format, ...);
 void mosError(const char *format, ...);
+void mosTraceRegisters();
 
 
 #endif /* defined(__mosrun__log__) */

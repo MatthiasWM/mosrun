@@ -66,45 +66,45 @@ unsigned int trapExitApp = 0;
 /**
  * Utility function.
  */
-void hexDump(unsigned int a, unsigned int n)
+void hexDump(mosPtr a, unsigned int n)
 {
-  int i = 0;
-  for (;;) {
-    mosTrace("%08X: ", a);
-    for (i=0; i<16; i++) {
-      if (i<n) {
-        byte b = *((byte*)a+i);
-        mosTrace("%02X ", b);
-      } else {
-        mosLog("   ");
-      }
+    int i = 0;
+    for (;;) {
+        mosTrace("%08X: ", a);
+        for (i=0; i<16; i++) {
+            if (i<n) {
+                byte b = mosRead8(a+i);
+                mosTrace("%02X ", b);
+            } else {
+                mosLog("   ");
+            }
+        }
+        for (i=0; i<16; i++) {
+            if (i<n) {
+                byte b = mosRead8(a+i);
+                mosTrace("%c", (b>=32 && b<127)?b:'.');
+            } else {
+                mosTrace(" ");
+            }
+        }
+        mosTrace("\n");
+        fflush(stdout);
+        if (n<=16) break;
+        a += 16;
+        n -= 16;
     }
-    for (i=0; i<16; i++) {
-      if (i<n) {
-        byte b = *((byte*)a+i);
-        mosTrace("%c", (b>=32 && b<127)?b:'.');
-      } else {
-        mosTrace(" ");
-      }
-    }
-    mosTrace("\n");
-    fflush(stdout);
-    if (n<=16) break;
-    a += 16;
-    n -= 16;
-  }
 }
 
 
 typedef void (*TrapNative)(unsigned short);
 typedef struct {
-  unsigned short cmd;
-  TrapNative trapNative;
-  unsigned short rts;
+    unsigned short cmd;
+    TrapNative trapNative;
+    unsigned short rts;
 } TrapNativeCall;
 
 
-unsigned short gCurrentTrap = 0;
+uint16_t gCurrentTrap = 0;
 TrapNativeCall **tncTable = 0;
 
 
@@ -120,21 +120,21 @@ TrapNativeCall **tncTable = 0;
  */
 void trapGetResource(unsigned short instr)
 {
-  unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
-  
-  unsigned int ret  = mosRead32(sp); sp += 4;
-  unsigned int id   = m68k_read_memory_16(sp); sp+=2;
-  unsigned int rsrc = m68k_read_memory_32(sp); sp+=4;
-  
-  mosTrace("            GetResource('%c%c%c%c', %d)\n",
-         rsrc>>24, rsrc>>16, rsrc>>8, rsrc, id);
-  unsigned int hdl = (unsigned int)GetResource(rsrc, id);
-  
-  m68k_write_memory_32(sp, hdl);
-  sp-=4; m68k_write_memory_32(sp, ret);
-  
-  m68k_set_reg(M68K_REG_SP, sp);
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret  = mosRead32(sp); sp += 4;
+    unsigned int id   = m68k_read_memory_16(sp); sp+=2;
+    unsigned int rsrc = m68k_read_memory_32(sp); sp+=4;
+
+    mosTrace("            GetResource('%c%c%c%c', %d)\n",
+             rsrc>>24, rsrc>>16, rsrc>>8, rsrc, id);
+    unsigned int hdl = (unsigned int)GetResource(rsrc, id);
+
+    m68k_write_memory_32(sp, hdl);
+    sp-=4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -148,16 +148,16 @@ void trapGetResource(unsigned short instr)
  */
 void trapLoadResource(unsigned short instr)
 {
-  unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
-  
-  unsigned int ret  = mosRead32(sp); sp += 4;
-  unsigned int hdl  = m68k_read_memory_32(sp); sp+=4;
-  
-  hdl = 0; // we don;t support unloaded resources, so the resource should still be in memory
-  
-  sp-=4; m68k_write_memory_32(sp, ret);
-  
-  m68k_set_reg(M68K_REG_SP, sp);
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret  = mosRead32(sp); sp += 4;
+    unsigned int hdl  = m68k_read_memory_32(sp); sp+=4;
+
+    hdl = 0; // we don;t support unloaded resources, so the resource should still be in memory
+
+    sp-=4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
 }
 
 
@@ -173,22 +173,22 @@ void trapLoadResource(unsigned short instr)
  */
 void trapGetNamedResource(unsigned short instr)
 {
-  unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
-  
-  unsigned int ret  = m68k_read_memory_32(sp); sp+=4;
-  unsigned int name = m68k_read_memory_32(sp); sp+=4;
-  unsigned int rsrc = m68k_read_memory_32(sp); sp+=4;
-  
-  mosTrace("            GetNamedResource('%c%c%c%c', %*s)\n",
-         rsrc>>24, rsrc>>16, rsrc>>8, rsrc,
-         m68k_read_memory_8(name), (char*)(name+1));
-  unsigned int hdl = (unsigned int)GetNamedResource(rsrc, (byte*)name);
-  
-  m68k_write_memory_32(sp, hdl);
-  sp-=4; m68k_write_memory_32(sp, ret);
-  
-  m68k_set_reg(M68K_REG_SP, sp);
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret  = m68k_read_memory_32(sp); sp+=4;
+    unsigned int name = m68k_read_memory_32(sp); sp+=4;
+    unsigned int rsrc = m68k_read_memory_32(sp); sp+=4;
+
+    mosTrace("            GetNamedResource('%c%c%c%c', %*s)\n",
+             rsrc>>24, rsrc>>16, rsrc>>8, rsrc,
+             m68k_read_memory_8(name), mosToHost(name+1));
+    mosHandle hdl = GetNamedResource(rsrc, (byte*)mosToHost(name));
+
+    m68k_write_memory_32(sp, hdl);
+    sp-=4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -203,20 +203,20 @@ void trapGetNamedResource(unsigned short instr)
  */
 void trapSizeResource(unsigned short instr)
 {
-  unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
-  
-  unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
-  unsigned int hdl = m68k_read_memory_32(sp); sp+=4;
-  
-  unsigned int ptr = m68k_read_memory_32(hdl);
-  unsigned int size = mosPtrSize(ptr);
-  mosTrace("            SizeResource(0x%08X) = %d\n", hdl, size);
-  
-  m68k_write_memory_32(sp, size);
-  sp-=4; m68k_write_memory_32(sp, ret);
-  
-  m68k_set_reg(M68K_REG_SP, sp);
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
+    unsigned int hdl = m68k_read_memory_32(sp); sp+=4;
+
+    unsigned int ptr = m68k_read_memory_32(hdl);
+    unsigned int size = mosPtrSize(ptr);
+    mosTrace("            SizeResource(0x%08X) = %d\n", hdl, size);
+
+    m68k_write_memory_32(sp, size);
+    sp-=4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -231,13 +231,13 @@ void trapSizeResource(unsigned short instr)
  */
 void trapNewPtrClear(unsigned short)
 {
-  unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
-  
-  mosTrace("            NewPtrClear(%d)\n", size);
-  unsigned int ptr = mosNewPtr(size);
-  
-  m68k_set_reg(M68K_REG_A0, ptr);
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
+
+    mosTrace("            NewPtrClear(%d)\n", size);
+    unsigned int ptr = mosNewPtr(size);
+
+    m68k_set_reg(M68K_REG_A0, ptr);
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -252,13 +252,13 @@ void trapNewPtrClear(unsigned short)
  */
 void trapNewPtr(unsigned short)
 {
-  unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
-  
-  mosTrace("            NewPtr(%d)\n", size);
-  unsigned int ptr = mosNewPtr(size);
-  
-  m68k_set_reg(M68K_REG_A0, ptr);
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
+
+    mosTrace("            NewPtr(%d)\n", size);
+    unsigned int ptr = mosNewPtr(size);
+
+    m68k_set_reg(M68K_REG_A0, ptr);
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -273,14 +273,14 @@ void trapNewPtr(unsigned short)
  */
 void trapNewHandle(unsigned short)
 {
-  unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
-  unsigned int hdl = 0;
-  
-  mosTrace("            NewHandle(%d)\n", size);
-  hdl = mosNewHandle(size);
-  
-  m68k_set_reg(M68K_REG_A0, hdl);
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
+    unsigned int hdl = 0;
+
+    mosTrace("            NewHandle(%d)\n", size);
+    hdl = mosNewHandle(size);
+
+    m68k_set_reg(M68K_REG_A0, hdl);
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -300,12 +300,12 @@ void trapNewHandle(unsigned short)
  */
 void trapRecoverHandle(unsigned short)
 {
-  unsigned int ptr = m68k_get_reg(0L, M68K_REG_A0);
-  
-  unsigned int hdl = mosRecoverHandle(ptr);
-  mosTrace("            RecoverHandle(0x%08X)=0x%08X\n", ptr, hdl);
-  
-  m68k_set_reg(M68K_REG_A0, hdl);
+    unsigned int ptr = m68k_get_reg(0L, M68K_REG_A0);
+
+    unsigned int hdl = mosRecoverHandle(ptr);
+    mosTrace("            RecoverHandle(0x%08X)=0x%08X\n", ptr, hdl);
+
+    m68k_set_reg(M68K_REG_A0, hdl);
 }
 
 
@@ -317,15 +317,15 @@ void trapRecoverHandle(unsigned short)
  */
 void trapGetHandleSize(unsigned short)
 {
-  unsigned int hdl = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int ret = 0;
-  
-  unsigned int ptr = m68k_read_memory_32(hdl);
-  if (ptr) {
-    ret = mosPtrSize(ptr);
-  }
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int hdl = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int ret = 0;
+
+    unsigned int ptr = m68k_read_memory_32(hdl);
+    if (ptr) {
+        ret = mosPtrSize(ptr);
+    }
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -338,13 +338,13 @@ void trapGetHandleSize(unsigned short)
  */
 void trapSetHandleSize(unsigned short)
 {
-  unsigned int hdl  = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
-  unsigned int ret = 0;
+    unsigned int hdl  = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
+    unsigned int ret = 0;
 
-  ret = mosSetHandleSize(hdl, size);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    ret = mosSetHandleSize(hdl, size);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -358,12 +358,12 @@ void trapSetHandleSize(unsigned short)
  */
 void trapDisposePtr(unsigned short)
 {
-  unsigned int ptr = m68k_get_reg(0L, M68K_REG_A0);
-  
-  mosTrace("            DisposePtr(0x%08X)\n", ptr);
-  mosDisposePtr(ptr);
-  
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int ptr = m68k_get_reg(0L, M68K_REG_A0);
+
+    mosTrace("            DisposePtr(0x%08X)\n", ptr);
+    mosDisposePtr(ptr);
+
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -377,13 +377,13 @@ void trapDisposePtr(unsigned short)
  */
 void trapDisposeHandle(unsigned short)
 {
-  unsigned int hdl = m68k_get_reg(0L, M68K_REG_A0);
-  
-  unsigned int ptr = hdl?m68k_read_memory_32(hdl):0;
-  mosTrace("            DisposeHandle(0x%08X(->0x%08X))\n", hdl, ptr);
-  mosDisposeHandle(hdl);
-  
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int hdl = m68k_get_reg(0L, M68K_REG_A0);
+
+    unsigned int ptr = hdl?m68k_read_memory_32(hdl):0;
+    mosTrace("            DisposeHandle(0x%08X(->0x%08X))\n", hdl, ptr);
+    mosDisposeHandle(hdl);
+
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -400,18 +400,18 @@ void trapDisposeHandle(unsigned short)
  */
 void trapBlockMove(unsigned short)
 {
-  unsigned int src  = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int dst  = m68k_get_reg(0L, M68K_REG_A1);
-  unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
-  
-  mosTrace("            BlockMove(src:%s, dst:%s, %d)\n", printAddr(src), printAddr(dst), size);
-  if (src<0x1000 || dst<0x1000) {
-    mosError("The addresses seem highly unlikely. You may have an uninitialized pointer or an uncought error\n");
-    // FIXME: however, it could be copying the app name from the global variable filed
-  }
-  memmove((void*)dst, (void*)src, size);
-  
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int src  = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int dst  = m68k_get_reg(0L, M68K_REG_A1);
+    unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
+
+    mosTrace("            BlockMove(src:%s, dst:%s, %d)\n", printAddr(src), printAddr(dst), size);
+    if (src<0x1000 || dst<0x1000) {
+        mosError("The addresses seem highly unlikely. You may have an uninitialized pointer or an uncought error\n");
+        // FIXME: however, it could be copying the app name from the global variable filed
+    }
+    memmove(mosToHost(dst), mosToHost(src), size);
+
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -427,12 +427,12 @@ void trapBlockMove(unsigned short)
  */
 void trapGetTrapAddress(unsigned short)
 {
-  unsigned int trap = m68k_get_reg(0L, M68K_REG_D0);
-  
-  unsigned int addr = (unsigned int)tncTable[trap&0x0fff];
-  mosTrace("            GetTrapAddress(0x%04X=%s) = 0x%08X\n", trap, trapName(trap), addr);
-  
-  m68k_set_reg(M68K_REG_A0, addr);
+    unsigned int trap = m68k_get_reg(0L, M68K_REG_D0);
+
+    unsigned int addr = (unsigned int)tncTable[trap&0x0fff];
+    mosTrace("            GetTrapAddress(0x%04X=%s) = 0x%08X\n", trap, trapName(trap), addr);
+
+    m68k_set_reg(M68K_REG_A0, addr);
 }
 
 
@@ -444,12 +444,12 @@ void trapGetTrapAddress(unsigned short)
  */
 void trapSetTrapAddress(unsigned short)
 {
-  unsigned int trap = m68k_get_reg(0L, M68K_REG_D0);
-  unsigned int addr = m68k_get_reg(0L, M68K_REG_A0);
-  
-  trap = (trap & 0x0dff) | 0xa800;
-  mosTrace("            SetTrapAddress(0x%04X=%s, 0x%08X)\n", trap, trapName(trap), addr);
-  tncTable[trap&0x0fff] = (TrapNativeCall*)addr;
+    unsigned int trap = m68k_get_reg(0L, M68K_REG_D0);
+    unsigned int addr = m68k_get_reg(0L, M68K_REG_A0);
+
+    trap = (trap & 0x0dff) | 0xa800;
+    mosTrace("            SetTrapAddress(0x%04X=%s, 0x%08X)\n", trap, trapName(trap), addr);
+    tncTable[trap&0x0fff] = (TrapNativeCall*)addr;
 }
 
 
@@ -464,29 +464,29 @@ void trapSetTrapAddress(unsigned short)
  */
 void trapLoadSeg(unsigned short instr)
 {
-  unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
-  
-  unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
-  unsigned int id   = m68k_read_memory_16(sp); sp += 2;
-  
-  mosTrace("            LoadSeg(%d)\n", id);
-  // now load the resource
-  mosHandle hCode = GetResource('CODE', id);
-  if (!hCode) {
-    mosDebug("Code Resource %d not found!\n", id);
-  } else {
-    unsigned int code = m68k_read_memory_32(hCode);
-    // fix the jump table entry
-    hexDump(hCode, 64);
-    unsigned int offset = m68k_read_memory_16(ret-8);
-    m68k_write_memory_16(ret-8, id);           // save the block id
-    m68k_write_memory_16(ret-6, 0x4ef9);       // 'jmp nnnnnnnn' instruction
-    m68k_write_memory_32(ret-4, code+offset+4);  // +4 -> skip the entry that gives the number of jump table entries?
-  }
-  
-  sp -= 4; m68k_write_memory_32(sp, ret-6);
-  
-  m68k_set_reg(M68K_REG_SP, sp);
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
+    unsigned int id   = m68k_read_memory_16(sp); sp += 2;
+
+    mosTrace("            LoadSeg(%d)\n", id);
+    // now load the resource
+    mosHandle hCode = GetResource('CODE', id);
+    if (!hCode) {
+        mosDebug("Code Resource %d not found!\n", id);
+    } else {
+        unsigned int code = m68k_read_memory_32(hCode);
+        // fix the jump table entry
+        hexDump(hCode, 64);
+        unsigned int offset = m68k_read_memory_16(ret-8);
+        m68k_write_memory_16(ret-8, id);           // save the block id
+        m68k_write_memory_16(ret-6, 0x4ef9);       // 'jmp nnnnnnnn' instruction
+        m68k_write_memory_32(ret-4, code+offset+4);  // +4 -> skip the entry that gives the number of jump table entries?
+    }
+
+    sp -= 4; m68k_write_memory_32(sp, ret-6);
+
+    m68k_set_reg(M68K_REG_SP, sp);
 }
 
 
@@ -511,7 +511,7 @@ void trapLoadSeg(unsigned short instr)
  * \todo add support for these flags (it's all already in the memory manager)
  */
 void trapHGetState(unsigned short instr) {
-  m68k_set_reg(M68K_REG_D0, 0x80); // locked memory // TODO: may need more flags!
+    m68k_set_reg(M68K_REG_D0, 0x80); // locked memory // TODO: may need more flags!
 }
 
 
@@ -521,7 +521,7 @@ void trapHGetState(unsigned short instr) {
  * There is no benefit to moving handles high in memory in this simulation.
  */
 void trapMoveHHi(unsigned short instr) {
-  // nothing to do here
+    // nothing to do here
 }
 
 
@@ -531,7 +531,7 @@ void trapMoveHHi(unsigned short instr) {
  * We never move memory, so there is no reason to implement this.
  */
 void trapHLock(unsigned short instr) {
-  // nothing to do here
+    // nothing to do here
 }
 
 
@@ -541,7 +541,7 @@ void trapHLock(unsigned short instr) {
  * We never move memory, so there is no reason to implement this.
  */
 void trapHUnlock(unsigned short instr) {
-  // nothing to do here
+    // nothing to do here
 }
 
 
@@ -551,7 +551,7 @@ void trapHUnlock(unsigned short instr) {
  * This function has been obsolete since 1992.
  */
 void trapStripAddress(unsigned short instr) {
-  // nothing to do here
+    // nothing to do here
 }
 
 
@@ -580,49 +580,49 @@ void trapStripAddress(unsigned short instr) {
  */
 void trapOSDispatch(unsigned short instr)
 {
-  unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
-  
-  unsigned int stack_ret = m68k_read_memory_32(sp); sp += 4;
-  unsigned short selector = m68k_read_memory_16(sp); sp += 2;
-  
-  switch (selector)
-  {
-    case 0x1D: { // mfTempNewHandleSel
-                 // Allocates a new relocatable block of temporary memory.
-                 // Handle TempNewHandle (Size logicalSize, OSErr *resultCode);
-      unsigned int resultCodePtr = m68k_read_memory_32(sp); sp += 4;
-      unsigned int size = m68k_read_memory_32(sp); sp += 4;
-      
-      unsigned int handle = mosNewHandle(size);
-      mosTrace("trapDispatch(0x1D): Allocated a master pointer at 0x%08X\n", handle);
-      
-      if (resultCodePtr) m68k_write_memory_16(resultCodePtr, 0);
-      m68k_write_memory_32(sp, handle);
-      break;
+    unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int stack_ret = m68k_read_memory_32(sp); sp += 4;
+    unsigned short selector = m68k_read_memory_16(sp); sp += 2;
+
+    switch (selector)
+    {
+        case 0x1D: { // mfTempNewHandleSel
+            // Allocates a new relocatable block of temporary memory.
+            // Handle TempNewHandle (Size logicalSize, OSErr *resultCode);
+            unsigned int resultCodePtr = m68k_read_memory_32(sp); sp += 4;
+            unsigned int size = m68k_read_memory_32(sp); sp += 4;
+
+            unsigned int handle = mosNewHandle(size);
+            mosTrace("trapDispatch(0x1D): Allocated a master pointer at 0x%08X\n", handle);
+
+            if (resultCodePtr) m68k_write_memory_16(resultCodePtr, 0);
+            m68k_write_memory_32(sp, handle);
+            break;
+        }
+        case 0x1E: // TempHLock - nothing to do
+            break;
+        case 0x1F: // TempHUnlock - nothing to do
+            break;
+        case 0x20: { // mfTempDisposHandleSel
+            // Releases a relocatable block in the temporary heap.
+            // void TempDisposeHandle (Handle h, OSErr *resultCode );
+            unsigned int resultCodePtr = m68k_read_memory_32(sp); sp += 4;
+            unsigned int handle = m68k_read_memory_32(sp); sp += 4;
+
+            mosDisposeHandle(handle);
+            mosTrace("TempDisposeHandle(0x%08X)\n", handle);
+
+            if (resultCodePtr) m68k_write_memory_16(resultCodePtr, 0);
+            break;
+        }
+        default:
+            mosError("Unimplemented OSDispatch 0x%02X\n", selector);
+            return;
     }
-    case 0x1E: // TempHLock - nothing to do
-      break;
-    case 0x1F: // TempHUnlock - nothing to do
-      break;
-    case 0x20: { // mfTempDisposHandleSel
-                 // Releases a relocatable block in the temporary heap.
-                 // void TempDisposeHandle (Handle h, OSErr *resultCode );
-      unsigned int resultCodePtr = m68k_read_memory_32(sp); sp += 4;
-      unsigned int handle = m68k_read_memory_32(sp); sp += 4;
-      
-      mosDisposeHandle(handle);
-      mosTrace("TempDisposeHandle(0x%08X)\n", handle);
-      
-      if (resultCodePtr) m68k_write_memory_16(resultCodePtr, 0);
-      break;
-    }
-    default:
-      mosError("Unimplemented OSDispatch 0x%02X\n", selector);
-      return;
-  }
-  
-  sp -= 4; m68k_write_memory_32(sp, stack_ret);
-  m68k_set_reg(M68K_REG_SP, sp);
+
+    sp -= 4; m68k_write_memory_32(sp, stack_ret);
+    m68k_set_reg(M68K_REG_SP, sp);
 }
 
 
@@ -634,20 +634,20 @@ void trapOSDispatch(unsigned short instr)
  */
 void trapSecondsToDate(unsigned short instr)
 {
-  unsigned int seconds = m68k_get_reg(0L, M68K_REG_D0);
-  unsigned int datetime = m68k_get_reg(0L, M68K_REG_A0);
-  
-  time_t clock = seconds - 2082844800; // plus the time in seconds between 1904 and 1970.
-  struct tm *tm = gmtime(&clock);
-  
-  // fill the struct DateTimeRec
-  m68k_write_memory_16(datetime   , tm->tm_year+1900);  // ux: +1900  mac: actual year
-  m68k_write_memory_16(datetime+2 , tm->tm_mon+1);      // ux: 0-11   mac: 1-12 ?
-  m68k_write_memory_16(datetime+4 , tm->tm_mday+1);     // ux: 1-31   mac: 1-31 ?
-  m68k_write_memory_16(datetime+6 , tm->tm_hour);       // ux: 0-23   mac: 0-23 ?
-  m68k_write_memory_16(datetime+8 , tm->tm_min);        // ux: 0-59   mac: 0-59 ?
-  m68k_write_memory_16(datetime+10, tm->tm_sec);        // ux: 0-59   mac: 0-59 ?
-  m68k_write_memory_16(datetime+12, tm->tm_wday+1);     // ux: Sun=0  mac: 1= ?
+    unsigned int seconds = m68k_get_reg(0L, M68K_REG_D0);
+    unsigned int datetime = m68k_get_reg(0L, M68K_REG_A0);
+
+    time_t clock = seconds - 2082844800; // plus the time in seconds between 1904 and 1970.
+    struct tm *tm = gmtime(&clock);
+
+    // fill the struct DateTimeRec
+    m68k_write_memory_16(datetime   , tm->tm_year+1900);  // ux: +1900  mac: actual year
+    m68k_write_memory_16(datetime+2 , tm->tm_mon+1);      // ux: 0-11   mac: 1-12 ?
+    m68k_write_memory_16(datetime+4 , tm->tm_mday+1);     // ux: 1-31   mac: 1-31 ?
+    m68k_write_memory_16(datetime+6 , tm->tm_hour);       // ux: 0-23   mac: 0-23 ?
+    m68k_write_memory_16(datetime+8 , tm->tm_min);        // ux: 0-59   mac: 0-59 ?
+    m68k_write_memory_16(datetime+10, tm->tm_sec);        // ux: 0-59   mac: 0-59 ?
+    m68k_write_memory_16(datetime+12, tm->tm_wday+1);     // ux: Sun=0  mac: 1= ?
 }
 
 
@@ -656,10 +656,10 @@ void trapSecondsToDate(unsigned short instr)
  */
 unsigned int mosTickCount()
 {
-  struct timeval tp;
-  gettimeofday(&tp, 0L);
-  unsigned int ticks = tp.tv_sec*60 + tp.tv_usec/(1000000/60);
-  return ticks;
+    struct timeval tp;
+    gettimeofday(&tp, 0L);
+    unsigned int ticks = tp.tv_sec*60 + tp.tv_usec/(1000000/60);
+    return ticks;
 }
 
 
@@ -668,8 +668,8 @@ unsigned int mosTickCount()
  */
 void trapTickCount(unsigned short instr)
 {
-  unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
-  m68k_write_memory_32(sp+4, mosTickCount());
+    unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
+    m68k_write_memory_32(sp+4, mosTickCount());
 }
 
 
@@ -680,7 +680,7 @@ void trapTickCount(unsigned short instr)
  */
 void trapHPurge(unsigned short instr)
 {
-  // nothing to do here
+    // nothing to do here
 }
 
 
@@ -691,16 +691,16 @@ void trapHPurge(unsigned short instr)
  */
 void trapReleaseResource(unsigned short instr)
 {
-  unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
-  
-  unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
-  unsigned int res  = m68k_read_memory_16(sp); sp += 4;
-  
-  res = 0; // don't actually do anything
-  
-  sp -= 4; m68k_write_memory_32(sp, ret);
-  
-  m68k_set_reg(M68K_REG_SP, sp);
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
+    unsigned int res  = m68k_read_memory_16(sp); sp += 4;
+
+    res = 0; // don't actually do anything
+
+    sp -= 4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
 }
 
 
@@ -711,37 +711,37 @@ void trapReleaseResource(unsigned short instr)
  */
 void trapCurResFile(unsigned short instr)
 {
-  unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
-  
-  unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
-  
-  m68k_write_memory_32(sp, 1);  // my resource ID
-  sp-=4; m68k_write_memory_32(sp, ret);
-  
-  m68k_set_reg(M68K_REG_SP, sp);
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
+
+    m68k_write_memory_32(sp, 1);  // my resource ID
+    sp-=4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
 /**
  * [A9A4] Use this Resource file from now on.
- * 
+ *
  * We support only a single Resource file, so, yeah, OK.
  */
 void trapHomeResFile(unsigned short instr)
 {
-  unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
-  
-  unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
-  unsigned int hdl = m68k_read_memory_32(sp); sp+=4;
-  
-  hdl = 0;
-  
-  m68k_write_memory_32(sp, 0);
-  sp-=4; m68k_write_memory_32(sp, ret);
-  
-  m68k_set_reg(M68K_REG_SP, sp);
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
+    unsigned int hdl = m68k_read_memory_32(sp); sp+=4;
+
+    hdl = 0;
+
+    m68k_write_memory_32(sp, 0);
+    sp-=4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -752,7 +752,7 @@ void trapHomeResFile(unsigned short instr)
 /**
  * [A051] Almost entirely undocumented.
  *
- * A0 points to the heap, so I guess the application expects some value to be 
+ * A0 points to the heap, so I guess the application expects some value to be
  * written there.
  * D0 seems to be some magic number, probably an index into the PRAM
  *
@@ -760,11 +760,11 @@ void trapHomeResFile(unsigned short instr)
  */
 void trapReadXPRam(unsigned short instr)
 {
-  unsigned int resultPtr = m68k_get_reg(0L, M68K_REG_A0);
-  if (resultPtr) {
-    m68k_write_memory_8(resultPtr, 0);
-  }
-  m68k_set_reg(M68K_REG_D0, 0);
+    unsigned int resultPtr = m68k_get_reg(0L, M68K_REG_A0);
+    if (resultPtr) {
+        m68k_write_memory_8(resultPtr, 0);
+    }
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -774,12 +774,12 @@ void trapReadXPRam(unsigned short instr)
  */
 void trapGetFileInfo(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBGetFInfo(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBGetFInfo(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -789,12 +789,12 @@ void trapGetFileInfo(unsigned short instr)
  */
 void trapSetFileInfo(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBSetFInfo(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBSetFInfo(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -804,12 +804,12 @@ void trapSetFileInfo(unsigned short instr)
  */
 void trapCreate(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBCreate(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBCreate(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -819,12 +819,12 @@ void trapCreate(unsigned short instr)
  */
 void trapSetEOF(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBSetEOF(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBSetEOF(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -834,12 +834,12 @@ void trapSetEOF(unsigned short instr)
  */
 void trapSetFPos(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBSetFPos(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBSetFPos(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -849,12 +849,12 @@ void trapSetFPos(unsigned short instr)
  */
 void trapRead(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBRead(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBRead(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -864,12 +864,12 @@ void trapRead(unsigned short instr)
  */
 void trapWrite(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBWrite(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBWrite(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -879,12 +879,12 @@ void trapWrite(unsigned short instr)
  */
 void trapClose(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBClose(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBClose(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -894,12 +894,12 @@ void trapClose(unsigned short instr)
  */
 void trapDelete(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBDelete(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBDelete(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -908,12 +908,12 @@ void trapDelete(unsigned short instr)
  */
 void trapFSDispatch(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int function = m68k_get_reg(0L, M68K_REG_D0);
-  
-  unsigned int ret = mosFSDispatch(paramBlock, function & 0xffff);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int function = m68k_get_reg(0L, M68K_REG_D0);
+
+    unsigned int ret = mosFSDispatch(paramBlock, function & 0xffff);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -922,12 +922,12 @@ void trapFSDispatch(unsigned short instr)
  */
 void trapHOpen(unsigned short instr)
 {
-  unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
-  unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
-  
-  unsigned int ret = mosPBHOpen(paramBlock, async);
-  
-  m68k_set_reg(M68K_REG_D0, ret);
+    unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
+
+    unsigned int ret = mosPBHOpen(paramBlock, async);
+
+    m68k_set_reg(M68K_REG_D0, ret);
 }
 
 
@@ -943,8 +943,8 @@ void trapHOpen(unsigned short instr)
  * No inputs or outputs.
  */
 void trapUninmplemented(unsigned short instr) {
-  // FIXME: $a01f; opcode 1010 (_DisposePtr)
-  mosError("Unimplemented trap 0x%08X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
+    // FIXME: $a01f; opcode 1010 (_DisposePtr)
+    mosError("Unimplemented trap 0x%08X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
 }
 
 
@@ -958,14 +958,14 @@ void trapUninmplemented(unsigned short instr) {
  */
 void trapGoNative(unsigned short instr)
 {
-  unsigned int pc = m68k_get_reg(0L, M68K_REG_PC);
-  
-  TrapNativeCall *tnc = (TrapNativeCall*)(pc);
-  TrapNative callTrap = tnc->trapNative;
-  callTrap(gCurrentTrap);
-  
-  pc = (unsigned int)(&(tnc->rts));
-  m68k_set_reg(M68K_REG_PC, pc);
+    unsigned int pc = m68k_get_reg(0L, M68K_REG_PC);
+
+    TrapNativeCall *tnc = (TrapNativeCall*)(pc);
+    TrapNative callTrap = tnc->trapNative;
+    callTrap(gCurrentTrap);
+
+    pc = (unsigned int)(&(tnc->rts));
+    m68k_set_reg(M68K_REG_PC, pc);
 }
 
 
@@ -982,16 +982,16 @@ void trapGoNative(unsigned short instr)
  */
 void trapBreakpoint(unsigned short instr)
 {
-  unsigned int pc = m68k_get_reg(0L, M68K_REG_PC);
-  
-  Breakpoint *bp = findBreakpoint(pc);
-  if (bp) {
-    mosDebug("BREAKPOINT: %s\n", bp->text);
-    gPendingBreakpoint = bp;
-  } else {
-    mosDebug("BREAKPOINT UNLISTED!\n");
-  }
-  bp = 0;
+    unsigned int pc = m68k_get_reg(0L, M68K_REG_PC);
+
+    Breakpoint *bp = findBreakpoint(pc);
+    if (bp) {
+        mosDebug("BREAKPOINT: %s\n", bp->text);
+        gPendingBreakpoint = bp;
+    } else {
+        mosDebug("BREAKPOINT UNLISTED!\n");
+    }
+    bp = 0;
 }
 
 
@@ -1005,17 +1005,17 @@ void trapBreakpoint(unsigned short instr)
  */
 void trapDispatch(unsigned short)
 {
-  unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
-  unsigned int new_sr = m68k_read_memory_16(sp); sp+=2; // pop the status register
-  unsigned int ret_addr = m68k_read_memory_32(sp); sp+=4;
-  /*unsigned int vec =*/ m68k_read_memory_16(sp); sp+=2;
-  
-  sp-=4; m68k_write_memory_32(sp, ret_addr);
-  m68ki_set_sr_noint(new_sr);
-  // just leave the return address on the stack
-  m68k_set_reg(M68K_REG_SP, sp);
-  // set the new PC according to our jump table to allow patched jump tables
-  m68k_set_reg(M68K_REG_PC, (unsigned int)tncTable[gCurrentTrap&0x0fff]);
+    unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
+    unsigned int new_sr = m68k_read_memory_16(sp); sp+=2; // pop the status register
+    unsigned int ret_addr = m68k_read_memory_32(sp); sp+=4;
+    /*unsigned int vec =*/ m68k_read_memory_16(sp); sp+=2;
+
+    sp-=4; m68k_write_memory_32(sp, ret_addr);
+    m68ki_set_sr_noint(new_sr);
+    // just leave the return address on the stack
+    m68k_set_reg(M68K_REG_SP, sp);
+    // set the new PC according to our jump table to allow patched jump tables
+    m68k_set_reg(M68K_REG_PC, (unsigned int)tncTable[gCurrentTrap&0x0fff]);
 }
 
 
@@ -1024,17 +1024,17 @@ void trapDispatch(unsigned short)
  */
 mosPtr createGlue(unsigned short index, mosTrap trap)
 {
-  // FIXME: unaligned format
-  mosPtr p = mosNewPtr(12);
-  mosWrite16(p,   0xAFFF);              // trap native
-  *((unsigned int*)(p+4)) = (unsigned int)trap;  // function pointer
-  mosWrite16(p+8, 0x4E75);              // rts
-  
-  if (index) {
-    tncTable[index&0x0FFF] = (TrapNativeCall*)p;
-  }
-  
-  return p;
+    // FIXME: unaligned format
+    mosPtr p = mosNewPtr(12);
+    mosWrite16(p,   0xAFFF);              // trap native
+    *((unsigned int*)(p+4)) = (unsigned int)trap;  // function pointer
+    mosWrite16(p+8, 0x4E75);              // rts
+
+    if (index) {
+        tncTable[index&0x0FFF] = (TrapNativeCall*)p;
+    }
+
+    return p;
 }
 
 
@@ -1043,115 +1043,115 @@ mosPtr createGlue(unsigned short index, mosTrap trap)
  */
 void mosSetupTrapTable()
 {
-  int i;
-  
-  mosPtr tncUnimplemented = createGlue(0, trapUninmplemented);
-  tncTable = (TrapNativeCall**)mosNewPtr(0x0fff*4);
-  for (i=0; i<0x0FFF; i++) {
-    tncTable[i] = (TrapNativeCall*)tncUnimplemented;
-  }
-  
-  // -- Initialization and Allocation
-  
-  // InitApplZone
-  // SetApplBase
-  // InitZone
-  // GetApplLimit
-  // SetAppleLimit
-  // MaxApplZone
-  // MoreMasters
-  
-  // -- Heap Zone Access
-  
-  // GetZone
-  // SetZone
-  // SystemZone
-  // ApplicZone
-  
-  // -- Allocating and Releasing Relocatable Blocks
-  
-  createGlue(0xA122, trapNewHandle);
-  createGlue(0xA023, trapDisposeHandle);
-  createGlue(0xA025, trapGetHandleSize);
-  createGlue(0xA024, trapSetHandleSize);
-  // HandleZone
-  createGlue(0xA128, trapRecoverHandle);
-  // ReallocHandle
-  
-  // -- Allocating and Releasing Nonrelocatable Blocks
-  
-  createGlue(0xA11E, trapNewPtr);
-  createGlue(0xA31E, trapNewPtrClear);
-  createGlue(0xA01F, trapDisposePtr);
-  // GetPtrSize
-  // SetPtrSize
-  // PtrZone
-  
-  // -- Freeing Space in the Heap
-  
-  // FreeMem
-  // MaxMem
-  // CompactMem
-  // ReservMem
-  // PurgeMem
-  // EmptyHandle
-  
-  // -- Properties of Relocatable Blocks
-  
-  createGlue(0xA029, trapHLock);
-  createGlue(0xA02A, trapHUnlock);
-  createGlue(0xA049, trapHPurge);
-  // HNoPurge
-  
-  // -- Grow Zone Operations
-  
-  // SetGrowZone
-  // GZSaveHnd
+    int i;
 
-  // -- Misc
-  
-  createGlue(0xA02E, trapBlockMove);
-  // TopMem
-  createGlue(0xA064, trapMoveHHi);
-  // MemError
-  
-  // -- Low Level File Functions
-  
-  createGlue(0xA000, trapHOpen);
-  tncTable[0x0200] = tncTable[0x0000];
-  createGlue(0xA001, trapClose);
-  createGlue(0xA002, trapRead);
-  createGlue(0xA003, trapWrite);
-  createGlue(0xA008, trapCreate);
-  createGlue(0xA009, trapDelete);
-  tncTable[0x0209] = tncTable[0x0009];
-  createGlue(0xA00C, trapGetFileInfo);
-  createGlue(0xA00D, trapSetFileInfo);
-  createGlue(0xA012, trapSetEOF);
-  createGlue(0xA044, trapSetFPos);
-  createGlue(0xA060, trapFSDispatch);
-  
-  // -- unsorted
-  
-  createGlue(0xA146, trapGetTrapAddress);
-  tncTable[0x0746] = tncTable[0x0146];
-  tncTable[0x0346] = tncTable[0x0146];
-  createGlue(0xA647, trapSetTrapAddress);
-  createGlue(0xA9F0, trapLoadSeg);
-  createGlue(0xA069, trapHGetState);
-  createGlue(0xA055, trapStripAddress);
-  createGlue(0xA9A0, trapGetResource);
-  createGlue(0xA9A2, trapLoadResource);
-  createGlue(0xA9A5, trapSizeResource);
-  createGlue(0xA9A1, trapGetNamedResource);
-  tncTable[0x0820] = tncTable[0x09A1];
-  createGlue(0xA88F, trapOSDispatch);
-  createGlue(0xA9C6, trapSecondsToDate);
-  createGlue(0xA975, trapTickCount);
-  createGlue(0xA9A3, trapReleaseResource);
-  createGlue(0xA051, trapReadXPRam);
-  createGlue(0xA994, trapCurResFile);
-  createGlue(0xA9A4, trapHomeResFile);
+    mosPtr tncUnimplemented = createGlue(0, trapUninmplemented);
+    tncTable = (TrapNativeCall**)mosNewPtr(0x0fff*4);
+    for (i=0; i<0x0FFF; i++) {
+        tncTable[i] = (TrapNativeCall*)tncUnimplemented;
+    }
+
+    // -- Initialization and Allocation
+
+    // InitApplZone
+    // SetApplBase
+    // InitZone
+    // GetApplLimit
+    // SetAppleLimit
+    // MaxApplZone
+    // MoreMasters
+
+    // -- Heap Zone Access
+
+    // GetZone
+    // SetZone
+    // SystemZone
+    // ApplicZone
+
+    // -- Allocating and Releasing Relocatable Blocks
+
+    createGlue(0xA122, trapNewHandle);
+    createGlue(0xA023, trapDisposeHandle);
+    createGlue(0xA025, trapGetHandleSize);
+    createGlue(0xA024, trapSetHandleSize);
+    // HandleZone
+    createGlue(0xA128, trapRecoverHandle);
+    // ReallocHandle
+
+    // -- Allocating and Releasing Nonrelocatable Blocks
+
+    createGlue(0xA11E, trapNewPtr);
+    createGlue(0xA31E, trapNewPtrClear);
+    createGlue(0xA01F, trapDisposePtr);
+    // GetPtrSize
+    // SetPtrSize
+    // PtrZone
+
+    // -- Freeing Space in the Heap
+
+    // FreeMem
+    // MaxMem
+    // CompactMem
+    // ReservMem
+    // PurgeMem
+    // EmptyHandle
+
+    // -- Properties of Relocatable Blocks
+
+    createGlue(0xA029, trapHLock);
+    createGlue(0xA02A, trapHUnlock);
+    createGlue(0xA049, trapHPurge);
+    // HNoPurge
+
+    // -- Grow Zone Operations
+
+    // SetGrowZone
+    // GZSaveHnd
+
+    // -- Misc
+
+    createGlue(0xA02E, trapBlockMove);
+    // TopMem
+    createGlue(0xA064, trapMoveHHi);
+    // MemError
+
+    // -- Low Level File Functions
+
+    createGlue(0xA000, trapHOpen);
+    tncTable[0x0200] = tncTable[0x0000];
+    createGlue(0xA001, trapClose);
+    createGlue(0xA002, trapRead);
+    createGlue(0xA003, trapWrite);
+    createGlue(0xA008, trapCreate);
+    createGlue(0xA009, trapDelete);
+    tncTable[0x0209] = tncTable[0x0009];
+    createGlue(0xA00C, trapGetFileInfo);
+    createGlue(0xA00D, trapSetFileInfo);
+    createGlue(0xA012, trapSetEOF);
+    createGlue(0xA044, trapSetFPos);
+    createGlue(0xA060, trapFSDispatch);
+
+    // -- unsorted
+
+    createGlue(0xA146, trapGetTrapAddress);
+    tncTable[0x0746] = tncTable[0x0146];
+    tncTable[0x0346] = tncTable[0x0146];
+    createGlue(0xA647, trapSetTrapAddress);
+    createGlue(0xA9F0, trapLoadSeg);
+    createGlue(0xA069, trapHGetState);
+    createGlue(0xA055, trapStripAddress);
+    createGlue(0xA9A0, trapGetResource);
+    createGlue(0xA9A2, trapLoadResource);
+    createGlue(0xA9A5, trapSizeResource);
+    createGlue(0xA9A1, trapGetNamedResource);
+    tncTable[0x0820] = tncTable[0x09A1];
+    createGlue(0xA88F, trapOSDispatch);
+    createGlue(0xA9C6, trapSecondsToDate);
+    createGlue(0xA975, trapTickCount);
+    createGlue(0xA9A3, trapReleaseResource);
+    createGlue(0xA051, trapReadXPRam);
+    createGlue(0xA994, trapCurResFile);
+    createGlue(0xA9A4, trapHomeResFile);
 }
 
 

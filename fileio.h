@@ -25,12 +25,13 @@
 #include "main.h"
 
 
+// FIXME: MosFile must be a mos object
 typedef struct
 {
-  int fd;
-  const char *filename;
-  bool open;
-  bool allocated;
+    int fd;
+    const char *filename;
+    bool open;
+    bool allocated;
 } MosFile;
 
 

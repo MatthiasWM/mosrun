@@ -17,29 +17,39 @@
  
  The author can be contacted at mosrun AT matthiasm DOT com.
  The latest source code can be found at http://code.google.com/p/dynee5/
- */
+
+ This code is 64 bit safe.
+*/
 
 #ifndef __mosrun__breakpoints__
 #define __mosrun__breakpoints__
 
 #include "main.h"
 
+/**
+ Define a breakpoint in the m68k code of a Classic executable.
+ */
 typedef struct Breakpoint {
-  struct Breakpoint *next;
-  unsigned int segment;
-  unsigned int segAddr;
-  unsigned int address;
-  unsigned short originalCmd;
-  const char *text;
+    // Manage breakpoints in a single linked list
+    struct Breakpoint *next;
+    // Classic executables can have multiple code segments
+    uint32_t segment;
+    // offset within the segment
+    uint32_t offset;
+    // address in mos memory
+    mosPtr address;
+    // this is the original m68k code that we replace with a bp trap
+    uint16_t originalCmd;
+    // this is a text describing the breakpoint
+    const char *text;
 } Breakpoint;
 
 extern Breakpoint *gFirstBreakpoint;
 extern Breakpoint *gPendingBreakpoint;
 
-
-void addBreakpoint(unsigned int segment, unsigned int address, const char *text="");
-Breakpoint *findBreakpoint(unsigned int pc);
-void installBreakpoints(unsigned int segment, unsigned int segAddr);
+void addBreakpoint(uint32_t segment, uint32_t offset, const char *text="");
+Breakpoint *findBreakpoint(mosPtr pc);
+void installBreakpoints(uint32_t segment, mosPtr segAddr);
 
 
 #endif /* defined(__mosrun__breakpoints__) */

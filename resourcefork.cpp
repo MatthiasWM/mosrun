@@ -38,7 +38,7 @@ unsigned int gResourceEnd[20] = { 0 };
  */
 const char *printAddr(unsigned int addr)
 {
-  static char buf[8][32] = { 0 };
+    static char buf[8][32] = { { 0 } };
   static int currBuf = 0;
   
   // use the next buffer
@@ -97,7 +97,7 @@ void dumpResourceMap()
       if (name!=0xffff) {
         unsigned short rsrcNameOffset = m68k_read_memory_16((unsigned int)(theRsrc+resTable+12*j+2));
         if (rsrcNameOffset==0xffff) continue; // unnamed resource
-        byte* rsrcName = theRsrc+rsrcMapNameList+rsrcNameOffset;
+        byte* rsrcName = (byte*)mosToHost(theRsrc+rsrcMapNameList+rsrcNameOffset);
         char buf[256] = { 0 };
         memcpy(buf, rsrcName+1, rsrcName[0]);
         mosTrace("           name='%s'\n", buf);
@@ -158,7 +158,7 @@ mosHandle GetResource(unsigned int myResType, unsigned short myId)
             
             mosHandle hdl = mosNewHandle(rsrcSize);
             mosPtr ptr = mosRead32(hdl);
-            memcpy((void*)ptr, theApp+rsrcData+rsrcOffset+4, rsrcSize);
+            memcpy(mosToHost(ptr), mosToHost(theApp+rsrcData+rsrcOffset+4), rsrcSize);
             // make the resource map point to the resource handle
             m68k_write_memory_32((unsigned int)(theRsrc+resTable+12*j+8), hdl);
             // set breakpoints
@@ -208,7 +208,7 @@ mosHandle GetNamedResource(unsigned int myResType, const byte *pName)
       for (j=0; j<nRes; j++) {
         unsigned short rsrcNameOffset = m68k_read_memory_16((unsigned int)(theRsrc+resTable+12*j+2));
         if (rsrcNameOffset==0xffff) continue; // unnamed resource
-        byte* rsrcName = theRsrc+rsrcMapNameList+rsrcNameOffset;
+        byte* rsrcName = (byte*)mosToHost(theRsrc+rsrcMapNameList+rsrcNameOffset);
         mosTrace("%*s\n", rsrcName[0], rsrcName+1);
         if (memcmp(pName, rsrcName, pName[0]+1)==0) {
           unsigned int handle = m68k_read_memory_32((unsigned int)(theRsrc+resTable+12*j+8));
@@ -229,7 +229,7 @@ mosHandle GetNamedResource(unsigned int myResType, const byte *pName)
             
             mosHandle hdl = mosNewHandle(rsrcSize);
             mosPtr ptr = mosRead32(hdl);
-            memcpy((void*)ptr, theApp+rsrcData+rsrcOffset+4, rsrcSize);
+            memcpy(mosToHost(ptr), mosToHost(theApp+rsrcData+rsrcOffset+4), rsrcSize);
             // make the resource map point to the resource handle
             m68k_write_memory_32((unsigned int)(theRsrc+resTable+12*j+8), hdl);
             // set breakpoints
@@ -272,9 +272,9 @@ unsigned int createA5World(mosHandle hCode0)
   unsigned int length  = m68k_read_memory_32(code0 +  8);
   unsigned int offset  = m68k_read_memory_32(code0 + 12);
   // create jump table
-  theJumpTable = (byte*)mosNewPtr(aboveA5+belowA5);
+  theJumpTable = mosNewPtr(aboveA5+belowA5);
   gMosCurJTOffset = offset;
-  memcpy(theJumpTable+belowA5+offset, (byte*)(code0+16), length);
+  memcpy(mosToHost(theJumpTable+belowA5+offset), mosToHost(code0+16), length);
   gResourceStart[19] = (unsigned int)(theJumpTable + belowA5);
   gResourceEnd[19] = (unsigned int)(theJumpTable + belowA5 + length);
   return (unsigned int)(theJumpTable + belowA5);
@@ -292,9 +292,9 @@ void readResourceMap()
   unsigned int rsrcMap = m68k_read_memory_32((unsigned int)(theApp+4));
   unsigned int rsrcMapSize = m68k_read_memory_32((unsigned int)(theApp+12));
   mosTrace("Rsrc Map %d bytes at 0x%08X\n", rsrcMapSize, rsrcMap);
-  theRsrc = (byte*)mosNewPtr(rsrcMapSize);
+  theRsrc = mosNewPtr(rsrcMapSize);
   theRsrcSize = rsrcMapSize;
-  memcpy(theRsrc, theApp+rsrcMap, rsrcMapSize);
+  memcpy(mosToHost(theRsrc), mosToHost(theApp+rsrcMap), rsrcMapSize);
   dumpResourceMap();
 }
 

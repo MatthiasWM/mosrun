@@ -23,6 +23,9 @@
 #define mosrun_main_h
 
 
+#include <stdint.h>
+
+
 #define MOS_BOUNDS_CHECK 0
 
 #define MOS_O_RDONLY      0x00      /* Open for reading only.            */
@@ -59,13 +62,31 @@ typedef unsigned int mosResType;
 
 typedef void (*mosTrap)(unsigned short);
 
-extern byte *theApp;
+extern mosPtr theApp;
 extern unsigned int theAppSize;
-extern byte *theRsrc;
+extern mosPtr theRsrc;
 extern unsigned int theRsrcSize;
-extern byte *theJumpTable;
+extern mosPtr theJumpTable;
 
 extern byte gFilterStdoutDataFrom;
 extern byte gFilterStdoutDataTo;
+
+const unsigned int kMosMemMax        = 256*1024;  // Size of emulated RAM
+
+const unsigned int kMosApplLimit      = 0x0130;  // Application heap limit
+const unsigned int kMosApplZone       = 0x02aa;  // Address of application heap zone
+const unsigned int kMosHeapEnd        = 0x0114;  // Address of end of application heap zone
+const unsigned int kMosMemTop         = 0x0108;  // Address of end of RAM (on Macintosh XL, end of RAM available to applications)
+const unsigned int kMosSysZone        = 0x02a6;  // Address of system heap zone
+const unsigned int kMosBufPtr         = 0x010c;  // Address of end of jump table
+const unsigned int kMosCurrentA5      = 0x0904;  // Address of boundary between application globals and application parameters
+const unsigned int kMosCurJTOffset    = 0x0934;  // Offset to jump table from location pointed to by A5 (word)
+const unsigned int kMosCurStackBase   = 0x0908;  // Address of base of stack; start of application globals
+
+const unsigned int kMosRndSeed        = 0x0156;  // random number seed (long)
+const unsigned int kMosTicks          = 0x016A;  // ticks since last boot (unsigned long)
+const unsigned int kMosDeskHook       = 0x0A6C;  // hook for painting desktop (pointer)
+const unsigned int kMosMBarHeight     = 0x0BAA;  // height of menu bar (integer)
+
 
 #endif

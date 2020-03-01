@@ -24,6 +24,15 @@
 #include <stdarg.h>
 
 
+// Inlcude Musahi's m68k emulator
+
+extern "C" {
+#include "musashi331/m68k.h"
+#include "musashi331/m68kcpu.h"
+#include "musashi331/m68kops.h"
+}
+
+
 static FILE *gMosLogFile = stderr;
 static int gMosVerbosity = MOS_VERBOSITY_WARN;
 
@@ -173,5 +182,29 @@ void mosError(const char *format, ...)
     vfprintf(stderr, format, va);
     va_end(va);
   }
+}
+
+void mosTraceRegisters()
+{
+    mosTrace("D0:%08X D1:%08X D2:%08X D3:%08X D4:%08X D5:%08X D6:%08X D7:%08X\n",
+             m68k_get_reg(0L, M68K_REG_D0),
+             m68k_get_reg(0L, M68K_REG_D1),
+             m68k_get_reg(0L, M68K_REG_D2),
+             m68k_get_reg(0L, M68K_REG_D3),
+             m68k_get_reg(0L, M68K_REG_D4),
+             m68k_get_reg(0L, M68K_REG_D5),
+             m68k_get_reg(0L, M68K_REG_D6),
+             m68k_get_reg(0L, M68K_REG_D7)
+             );
+    mosTrace("A0:%08X A1:%08X A2:%08X A3:%08X A4:%08X A5:%08X A6:%08X A7:%08X\n",
+             m68k_get_reg(0L, M68K_REG_A0),
+             m68k_get_reg(0L, M68K_REG_A1),
+             m68k_get_reg(0L, M68K_REG_A2),
+             m68k_get_reg(0L, M68K_REG_A3),
+             m68k_get_reg(0L, M68K_REG_A4),
+             m68k_get_reg(0L, M68K_REG_A5),
+             m68k_get_reg(0L, M68K_REG_A6),
+             m68k_get_reg(0L, M68K_REG_A7)
+             );
 }
 
