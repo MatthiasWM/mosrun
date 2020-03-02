@@ -105,28 +105,35 @@ As of August 3rd, 2013:
    
 3. I have added filename-separator translation. MacRoman to UTF8 translation
    will follow shortly.
-   
+
+As of March 2nd, 2020:
+
+1. ARM6asm runs fine again in a 64 bit environmet.
+1. TODO: write a BUILD.md file
+1. TODO: write a script that generates command line executables of all NCT tools
+1. TODO: create directories with real life examples
+
 
 Alternatives to mosrun
 ----------------------
 
-BasiliskII, Mini VMac, and other emulators: 
-  this requires to set up an entire MacOS system with MPW and tools. It is not
-  (easily) possible to launch tools inside MPW from the host computer though.
-Executor:
-  Does what mosrun does for graphical MacOS applications. It seems to be lacking 
-  the MPW interface, plus I could not get it to compile.
-Classix:
-  Very similar to mosrun, but focusses on PPC. Some of the Newton tools are not
-  available in PPC though, only in m68k.
-mpw:
-  https://github.com/ksherlock/mpw/blob/master/README.text came online the same 
-  week that I went online. Wow!
-macloader:
-  https://github.com/lordhoto/macloader tries something similar but seems to be
-  inactive.
-and of course Carbon/Rosetta on OS X with PowerPC
-  http://www.apple.com
+* BasiliskII, Mini VMac, and other emulators:
+  * this requires to set up an entire MacOS system with MPW and tools. It is not
+    (easily) possible to launch tools inside MPW from the host computer though.
+* Executor:
+  * Does what mosrun does for graphical MacOS applications. It seems to be lacking
+    the MPW interface, plus I could not get it to compile.
+* Classix:
+  * Very similar to mosrun, but focusses on PPC. Some of the Newton tools are not
+    available in PPC though, only in m68k.
+* mpw:
+  * https://github.com/ksherlock/mpw/blob/master/README.text came online the same
+    week that I went online. Wow!
+* macloader:
+  * https://github.com/lordhoto/macloader tries something similar but seems to be
+    inactive.
+* and of course Carbon/Rosetta on OS X with PowerPC
+  * http://www.apple.com
 
 
 mosrun is licensed under GPL V3. No warranties, no claims, enjoy.
