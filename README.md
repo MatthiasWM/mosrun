@@ -10,6 +10,7 @@ Table of Contents
 1. About
 1. Usage
 1. Resource forks and tool binaries
+1. Todo List
 1. Alternatives to mosrun
 
 Note
@@ -112,10 +113,16 @@ As of August 3rd, 2013:
 As of March 2nd, 2020:
 
 1. ARM6asm runs fine again in a 64 bit environmet
-1. TODO: write a BUILD.md file
-1. TODO: write a script that generates command line executables of all NCT tools
-1. TODO: create directories with real life examples
-1. TODO: verify memory management and add bound checking again
+1. Memeory managment verified and running
+
+Todo List
+---------
+
+1. write a BUILD.md file to explain how to build mosrun and more
+1. verify build on Linux and MSWindows
+1. make 'mosmake' part of 'mosrun'
+1. write a script that generates command line executables of all NCT tools
+1. create directories with real world examples
 
 
 Alternatives to mosrun
