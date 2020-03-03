@@ -30,9 +30,18 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#ifdef WIN32
+#include <io.h>
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+#define O_NOFOLLOW 0
+#else
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/xattr.h>
+#define O_BINARY 0
+#endif
 #include <fcntl.h>
 #include <sys/stat.h>
 
@@ -100,6 +109,7 @@ void trapSyFAccess(uint16_t) {
     // FIXME: do we need to convert the flags?
     int fd = -1;
     unsigned short mode = ((flags&3)-1);  // convert O_RDRW, O_RDONLY and O_WRONLY
+	mode |= O_BINARY; // WIN32
     if ( flags & MOS_O_APPEND ) mode |= O_APPEND;
     if ( flags & MOS_O_APPEND ) mode |= O_APPEND;
     if ( flags & MOS_O_CREAT ) mode |= O_CREAT;
@@ -350,16 +360,20 @@ int mosPBGetFInfo(mosPtr paramBlock, bool)
     // 68.l: ioFlRPyLen  phys size
     m68k_write_memory_32(paramBlock+64, 0);
     // 72.l: ioFlCrDat  date and time of creation, seconds sinc 1.1.1904
-#ifndef _POSIX_SOURCE
-    m68k_write_memory_32(paramBlock+72, st.st_ctimespec.tv_sec + 2082844800);
+#ifdef _POSIX_SOURCE
+	m68k_write_memory_32(paramBlock + 72, st.st_ctime + 2082844800);
+#elif defined WIN32
+	m68k_write_memory_32(paramBlock + 72, st.st_ctime + 2082844800);
 #else
-    m68k_write_memory_32(paramBlock+72, st.st_ctime + 2082844800);
+	m68k_write_memory_32(paramBlock + 72, st.st_ctimespec.tv_sec + 2082844800);
 #endif
     // 76.l: ioFlMdDat  date and time of last modification
-#ifndef _POSIX_SOURCE
-    m68k_write_memory_32(paramBlock+76, st.st_mtimespec.tv_sec + 2082844800);
+#ifdef _POSIX_SOURCE
+	m68k_write_memory_32(paramBlock + 76, st.st_mtime + 2082844800);
+#elif defined WIN32
+	m68k_write_memory_32(paramBlock + 72, st.st_ctime + 2082844800);
 #else
-    m68k_write_memory_32(paramBlock+76, st.st_mtime + 2082844800);
+	m68k_write_memory_32(paramBlock + 76, st.st_mtimespec.tv_sec + 2082844800);
 #endif
 
     m68k_write_memory_16(paramBlock+16, mosNoErr);
@@ -397,7 +411,11 @@ int mosPBSetEOF(mosPtr paramBlock, bool)
     int ioRefNum = m68k_read_memory_16(paramBlock+24);
     uint32_t ioMisc = m68k_read_memory_32(paramBlock+28);
 
+#ifdef WIN32
+	int ret = _chsize(ioRefNum, ioMisc);
+#else
     int ret = ftruncate(ioRefNum, ioMisc);
+#endif
     if (ret==-1) {
         mosDebug("mosPBSetEOF %d %d failed: %s\n", ioRefNum, ioMisc, strerror(errno));
         m68k_write_memory_16(paramBlock+16, mosFnfErr);
