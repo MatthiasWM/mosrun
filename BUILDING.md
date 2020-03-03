@@ -2,10 +2,14 @@
 Building mosrun
 ============
 
+
+Table of Contents
+-----------------
+
 1. Build variants
 1. CMake
 1. MacOS
-1. Xcode (verified with Xcode 11.3)
+    1. Xcode (verified with Xcode 11.3)
     1. Makefiles  (verified with Xcode 11.3)
 1. Linux
     1. Makefiles (untested)
@@ -49,7 +53,7 @@ Of course you can use the _Xcode_ graphical interface as well. After the call to
 enter the command  `open mosrun.xcodeproj` and press _Apple-B_ to build the
 program.
 
-```
+```bash
 git clone https://github.com/MatthiasWM/mosrun.git mosrun
 cd mosrun
 mkdir Build && cd Build
@@ -66,7 +70,7 @@ MacOS: Makefiles
 Run the following commands from your Unix shell inside your developer directory.
 This will create command line executables in `mosrun/Build/Makefiles/` .
 
-```
+```bash
 git clone https://github.com/MatthiasWM/mosrun.git mosrun
 cd mosrun
 mkdir Build && cd Build
@@ -95,7 +99,7 @@ Linux: Makefiles
 Run the following commands from your Unix shell inside your developer directory.
 This will create command line executables in `mosrun/Build/Makefiles/` .
 
-```
+```bash
 git clone https://github.com/MatthiasWM/mosrun.git mosrun
 cd mosrun
 mkdir Build && cd Build
