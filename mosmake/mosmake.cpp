@@ -8,6 +8,15 @@
 
 
 #include <stdio.h>
+
+int main(int, char**)
+{
+    fprintf(stderr, "%s", "mosmake has not been ported yet.\n");
+}
+
+#if 0
+
+#include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
@@ -138,6 +147,7 @@ int main(int argc, const char * argv[])
   return 0;
 }
 
+#endif
 
 
 

@@ -12,7 +12,7 @@ Table of Contents
     1. Xcode (verified with Xcode 11.3)
     1. Makefiles  (verified with Xcode 11.3)
 1. Linux
-    1. Makefiles (untested)
+1. Makefiles (verified on Ubuntu 18.04.3 LTS)
 1. MSWindows
     1. VisualC (untested)
 
