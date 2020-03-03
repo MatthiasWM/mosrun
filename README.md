@@ -3,6 +3,7 @@
 mosrun
 ======
 
+
 Table of Contents
 -----------------
 
@@ -12,6 +13,7 @@ Table of Contents
 1. Resource forks and tool binaries
 1. Todo List
 1. Alternatives to mosrun
+
 
 Note
 ----
@@ -114,6 +116,7 @@ As of March 2nd, 2020:
 
 1. ARM6asm runs fine again in a 64 bit environmet
 1. Memeory managment verified and running
+
 
 Todo List
 ---------

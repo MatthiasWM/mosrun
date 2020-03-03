@@ -36,6 +36,7 @@ add_executable(mosmake
 
 add_custom_target(documentation SOURCES
     README.md
+    BUILDING.md
     LICENSE
     scratchpad.txt
     )
