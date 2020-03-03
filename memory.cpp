@@ -19,6 +19,11 @@
  The latest source code can be found at http://code.google.com/p/dynee5/
  */
 
+//#define MOS_CHECK_MEMORY_COHERENCE mosCheckMemoryCoherence();
+#define MOS_CHECK_MEMORY_COHERENCE
+//#define MOS_TRACE_MEMORY(a) a
+#define MOS_TRACE_MEMORY(a)
+
 #include "memory.h"
 #include "log.h"
 
@@ -54,71 +59,81 @@ mosPtr hostToMos(void *p)
     return (mosPtr)((byte*)(p)-MosMem);
 }
 
-const mosPtr mosMemBlockPrev = 0;
-const mosPtr mosMemBlockNext = 4;
-const mosPtr mosMemBlockSize = 8;
-const mosPtr mosMemBlockFlags = 12;
-const mosPtr mosSizeofMemBlock = 16;
+const mosPtr mosMemBlockPrev    = 0;
+const mosPtr mosMemBlockNext    = 4;
+const mosPtr mosMemBlockSize    = 8;
+const mosPtr mosMemBlockFlags   = 12;
+const mosPtr mosSizeofMemBlock  = 16;
 
-const uint32_t mosMemFlagFree = 0;
-const uint32_t mosMemFlagUsed = 1;
-const uint32_t mosMemFlagHandles = 2;
-const uint32_t mosMemFlagLast = 3;
+const uint32_t mosMemFlagMagic      = 0xbeef0000;
+const uint32_t mosMemFlagMagicMask  = 0xffff0000;
+const uint32_t mosMemFlagFree       = mosMemFlagMagic | 0;
+const uint32_t mosMemFlagUsed       = mosMemFlagMagic | 1;
+const uint32_t mosMemFlagHandles    = mosMemFlagMagic | 2;
+const uint32_t mosMemFlagLast       = mosMemFlagMagic | 3;
+
+const mosPtr mosMemBlockStart = kSystemHeapStart;
 
 void mosMemoryInit()
 {
     MosMem = (byte*)calloc(kMosMemMax, 1);
     // create a first and a last memory managing block
-    mosPtr firstBlock = 0x00001E00;
+    mosPtr firstBlock = mosMemBlockStart;
     mosPtr lastBlock = kMosMemMax - mosSizeofMemBlock;
     // the first block starts a list of all blocks of memory
-    mosWrite32(firstBlock+mosMemBlockPrev, 0); // no previous block
-    mosWrite32(firstBlock+mosMemBlockNext, lastBlock); // next block is the last block
-    mosWrite32(firstBlock+mosMemBlockSize, lastBlock-firstBlock-mosSizeofMemBlock); // available bytes in this block
-    mosWrite32(firstBlock+mosMemBlockFlags, mosMemFlagFree); // this space for rent
+    mosWriteUnsafe32(firstBlock+mosMemBlockPrev, 0); // no previous block
+    mosWriteUnsafe32(firstBlock+mosMemBlockNext, lastBlock); // next block is the last block
+    mosWriteUnsafe32(firstBlock+mosMemBlockSize, lastBlock-firstBlock-mosSizeofMemBlock); // available bytes in this block
+    mosWriteUnsafe32(firstBlock+mosMemBlockFlags, mosMemFlagFree); // this space for rent
     // the last block marks the end of managed space
-    mosWrite32(lastBlock+mosMemBlockPrev, firstBlock);
-    mosWrite32(lastBlock+mosMemBlockNext, 0);
-    mosWrite32(lastBlock+mosMemBlockSize, 0);
-    mosWrite32(lastBlock+mosMemBlockFlags, mosMemFlagLast);
+    mosWriteUnsafe32(lastBlock+mosMemBlockPrev, firstBlock);
+    mosWriteUnsafe32(lastBlock+mosMemBlockNext, 0);
+    mosWriteUnsafe32(lastBlock+mosMemBlockSize, 0);
+    mosWriteUnsafe32(lastBlock+mosMemBlockFlags, mosMemFlagLast);
+
+    mosCheckMemoryCoherence();
 }
 
-// FIXME: this is very buggy!
 mosPtr mosMalloc(uint size)
 {
     // calculate the minimal block size we need to find
     if (size==0) return 0;
+    MOS_CHECK_MEMORY_COHERENCE
     // align with 4 bytes
     uint32_t minimumBlockSize = ((size + 3) & ~0x00000003);
     // now run the list of blocks (could be otimized for speed)
-    mosPtr b = 0x00001E00;
+    mosPtr b = mosMemBlockStart;
     for (;;) {
-        mosPtr next = mosRead32(b+mosMemBlockNext);
+        mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
         if (next==0) {
             fprintf(stderr, "MOSMalloc failed: out of memory\n");
             assert(1);
         }
-        uint32_t flags = mosRead32(b+mosMemBlockFlags);
+        uint32_t flags = mosReadUnsafe32(b+mosMemBlockFlags);
         if (flags==mosMemFlagFree) { // a free block
-            uint32_t availableBlockSize = mosRead32(b+mosMemBlockSize);
+            uint32_t availableBlockSize = mosReadUnsafe32(b+mosMemBlockSize);
             if (availableBlockSize==minimumBlockSize) {
                 // the size matches; just mark it used and return its address
-                mosWrite32(b+mosMemBlockFlags, mosMemFlagUsed);
+                mosWriteUnsafe32(b+mosMemBlockFlags, mosMemFlagUsed);
+                MOS_TRACE_MEMORY( printf("-- malloc match at 0x%08X, n=%d\n", b+mosSizeofMemBlock, size); )
+                MOS_CHECK_MEMORY_COHERENCE
                 return b+mosSizeofMemBlock;
             } else if (availableBlockSize>minimumBlockSize+mosSizeofMemBlock) {
                 // size is bigger than needed plus room for a new block: split this block
                 mosPtr c = b + mosSizeofMemBlock + minimumBlockSize;
                 // creaste the splitting new mem block
-                mosWrite32(c+mosMemBlockPrev, b);
-                mosWrite32(c+mosMemBlockNext, next);
-                mosWrite32(c+mosMemBlockSize, next - c - mosSizeofMemBlock );
-                mosWrite32(c+mosMemBlockFlags, mosMemFlagFree);
+                mosWriteUnsafe32(c+mosMemBlockPrev, b);
+                mosWriteUnsafe32(c+mosMemBlockNext, next);
+                mosWriteUnsafe32(c+mosMemBlockSize, next - c - mosSizeofMemBlock );
+                mosWriteUnsafe32(c+mosMemBlockFlags, mosMemFlagFree);
                 // update the current mem block
-                mosWrite32(b+mosMemBlockNext, c);
-                mosWrite32(b+mosMemBlockSize, size);
-                mosWrite32(b+mosMemBlockFlags, mosMemFlagUsed);
+                mosWriteUnsafe32(b+mosMemBlockNext, c);
+                mosWriteUnsafe32(b+mosMemBlockSize, size);
+                mosWriteUnsafe32(b+mosMemBlockFlags, mosMemFlagUsed);
                 // update the block after the splitting block
-                mosWrite32(next+mosMemBlockPrev, c);
+                mosWriteUnsafe32(next+mosMemBlockPrev, c);
+                MOS_TRACE_MEMORY( printf("-- malloc split at 0x%08X, n=%d\n", b+mosSizeofMemBlock, size); )
+                MOS_CHECK_MEMORY_COHERENCE
                 return b+mosSizeofMemBlock;
             } else {
                 // size is too small, test the next block
@@ -131,51 +146,209 @@ mosPtr mosMalloc(uint size)
 void mosJoinBlocks(mosPtr b)
 {
     if (!b) return;
-    mosPtr c = mosRead32(b+mosMemBlockNext);
-    if (!c) return;
-    uint32_t bFlags = mosRead32(b+mosMemBlockFlags);
+    uint32_t bFlags = mosReadUnsafe32(b+mosMemBlockFlags);
+    if ( (bFlags&mosMemFlagMagicMask) != mosMemFlagMagic) {
+        mosError("mosJoinBlocks received an illegal block at 0x%08X\n", b+mosSizeofMemBlock);
+        assert(0);
+    }
     if (bFlags!=mosMemFlagFree) return;
-    uint32_t cFlags = mosRead32(c+mosMemBlockFlags);
+
+    mosPtr c = mosReadUnsafe32(b+mosMemBlockNext);
+    if (!c) return;
+    uint32_t cFlags = mosReadUnsafe32(c+mosMemBlockFlags);
+    if ( (cFlags&mosMemFlagMagicMask) != mosMemFlagMagic) {
+        mosError("mosJoinBlocks found an illegal block at 0x%08X\n", c+mosSizeofMemBlock);
+        assert(0);
+    }
     if (cFlags!=mosMemFlagFree) return;
-    mosPtr d = mosRead32(c+mosMemBlockNext);
+
+    mosPtr d = mosReadUnsafe32(c+mosMemBlockNext);
     if (!d) return;
-    // ok, so both blocks exist, are connected, and are free
-    mosWrite32(d+mosMemBlockPrev, b);
-    mosWrite32(b+mosMemBlockNext, d);
-    mosWrite32(b+mosMemBlockSize, d-b-mosSizeofMemBlock);
+    uint32_t dFlags = mosReadUnsafe32(d+mosMemBlockFlags);
+    if ( (dFlags&mosMemFlagMagicMask) != mosMemFlagMagic) {
+        mosError("mosJoinBlocks found an illegal block at 0x%08X\n", d+mosSizeofMemBlock);
+        assert(0);
+    }
+
+    // ok, so both blocks exist, are connected, and are free, so joint them
+    mosWriteUnsafe32(d+mosMemBlockPrev, b);
+    mosWriteUnsafe32(b+mosMemBlockNext, d);
+    mosWriteUnsafe32(b+mosMemBlockSize, d-b-mosSizeofMemBlock);
+    // clear remainders of the memory block that we removed
+    mosWriteUnsafe32(c+mosMemBlockPrev, 0);
+    mosWriteUnsafe32(c+mosMemBlockNext, 0);
+    mosWriteUnsafe32(c+mosMemBlockSize, 0);
+    mosWriteUnsafe32(c+mosMemBlockFlags, 0);
+    MOS_TRACE_MEMORY( printf("-- malloc join 0x%08X - 0x%08X - 0x%08X\n", b+mosSizeofMemBlock, c+mosSizeofMemBlock, d+mosSizeofMemBlock); )
 }
 
 void mosFree(mosPtr addr)
 {
+    MOS_TRACE_MEMORY( printf("-- malloc free at 0x%08X\n", addr); )
+    MOS_CHECK_MEMORY_COHERENCE
     mosPtr b = addr - mosSizeofMemBlock;
-    mosPtr next = mosRead32(b+mosMemBlockNext);
-    uint32_t flags = mosRead32(b+mosMemBlockFlags);
-    if (flags!=mosMemFlagUsed) {
-        assert(1);
-        // something went terribly wrong!
+    mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
+    uint32_t flags = mosReadUnsafe32(b+mosMemBlockFlags);
+    if ( (flags&mosMemFlagMagicMask) != mosMemFlagMagic) {
+        mosError("mosFree is trying to free a block at an invalid address 0x%08X\n", addr);
+        assert(0);
     }
-    mosWrite32(b+mosMemBlockFlags, mosMemFlagFree);
-    mosWrite32(b+mosMemBlockSize, next-b-mosSizeofMemBlock);
+    if (flags==mosMemFlagFree) {
+        mosError("mosFree is trying to free a block a second time at address 0x%08X\n", addr);
+        assert(0);
+    }
+    if (flags!=mosMemFlagUsed && flags!=mosMemFlagHandles) {
+        mosError("mosFree is trying to free a block that was not allocated at 0x%08X\n", addr);
+        assert(0);
+    }
+    mosWriteUnsafe32(b+mosMemBlockFlags, mosMemFlagFree);
+    mosWriteUnsafe32(b+mosMemBlockSize, next-b-mosSizeofMemBlock);
     // optimize: if the next block is free, join both blocks
-    mosJoinBlocks(addr);
+    mosJoinBlocks(b);
     // optimize: if the previous block is free, join both blocks
-    mosPtr prev = mosRead32(b+mosMemBlockPrev);
+    mosPtr prev = mosReadUnsafe32(b+mosMemBlockPrev);
     mosJoinBlocks(prev);
+    MOS_CHECK_MEMORY_COHERENCE
 }
 
+/**
+ Check if it is leagal to access the given range of memory.
+
+ Check if the mos address is within physical range. This will fail if the memory block
+ is not marked as free or if the memory block touches memeory management data.
+
+ \param address check access starting from this address
+ \param size check this byte range
+ \return true, if access is allowed for the entire range
+ \return false, if access is invalid, and if the flags are set, output a diagnostic message
+ */
+bool mosCheckMemoryAccess(mosPtr address, uint32_t size)
+{
+    mosPtr first = address, last = address+size-1;
+    mosPtr b = mosMemBlockStart;
+    if (first<b || last>=kMosMemMax) {
+        mosWarning("mosCheckMemoryAccess: address range 0x%08X to 0x%08X not within managed RAM.\n"
+                   "  Legal memory range is 0x%08X to 0x%08X\n", mosMemBlockStart, kMosMemMax-1);
+        return false;
+    }
+    for (;;) {
+        mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
+        if (next>=last) {
+            uint32_t flags = mosReadUnsafe32(b+mosMemBlockFlags);
+            if (flags==mosMemFlagHandles || flags==mosMemFlagUsed) {
+                uint32_t bSize = mosReadUnsafe32(b+mosMemBlockSize);
+                mosPtr bFirst = b+mosSizeofMemBlock, bLast = bFirst+bSize-1;
+                if (bFirst<=first && bLast>=last)
+                    return true;
+            }
+        }
+        if (next==0) {
+            mosWarning("mosCheckMemoryAccess: memory allocation for address range 0x%08X to 0x%08X not found.\n", first, last);
+            return false;
+        }
+        if (next>first) {
+            uint32_t bSize = mosReadUnsafe32(b+mosMemBlockSize);
+            uint32_t nSize = mosReadUnsafe32(next+mosMemBlockSize);
+            mosWarning("mosCheckMemoryAccess: memory allocation for address range 0x%08X to 0x%08X not found.\n"
+                       "  Closest allocations are 0x%08X to 0x%08X and 0x%08X to 0x%08X\n",
+                       first, last,
+                       b+mosSizeofMemBlock, b+mosSizeofMemBlock+bSize-1,
+                       next+mosSizeofMemBlock, next+mosSizeofMemBlock+nSize-1);
+            if (next>first)
+            return false;
+        }
+        b = next;
+    }
+}
 
 /**
- * Allocate and copy a text string in the memory list.
- *  FIXME: make sure that 'text' is pointing to host memory, not mos memory!
+ Check if all the memory management structures are linked correctly.
+
+ \return true, if everything is ok
+ */
+bool mosCheckMemoryCoherence()
+{
+    mosPtr b = mosMemBlockStart;
+    if (mosReadUnsafe32(b+mosMemBlockPrev)!=0)
+        mosError("mosCheckMemoryCoherency: firstBlock.prev is not NULL!\n");
+    if (mosReadUnsafe32(b+mosMemBlockNext)==0)
+        mosError("mosCheckMemoryCoherency: firstBlock.next must not be NULL!\n");
+    for (;;) {
+        mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
+        if (next==0) break; // this must be the final mem block
+        if (mosReadUnsafe32(next+mosMemBlockPrev)!=b)
+            mosError("mosCheckMemoryCoherency: block.next.first must point back at block!\n");
+        uint32_t bFlags = mosReadUnsafe32(b+mosMemBlockFlags);
+        if ( (bFlags&mosMemFlagMagicMask) != mosMemFlagMagic)
+            mosError("mosCheckMemoryCoherency: missing magic value at 0x%08X\n", b+mosSizeofMemBlock);
+        uint32_t nFlags = mosReadUnsafe32(next+mosMemBlockFlags);
+        if (bFlags==mosMemFlagFree && nFlags==mosMemFlagFree)
+            mosError("mosCheckMemoryCoherency: a free block must not be followed by another free block!\n");
+        uint32_t bSize = mosReadUnsafe32(b+mosMemBlockSize);
+        if (bFlags==mosMemFlagFree && b+mosSizeofMemBlock+bSize!=next)
+            mosError("mosCheckMemoryCoherency: free block has illegal block size!\n");
+        if (bFlags==mosMemFlagUsed && b+mosSizeofMemBlock+bSize>next)
+            mosError("mosCheckMemoryCoherency: used block has illegal block size!\n");
+        if (bFlags==mosMemFlagHandles && (b+mosSizeofMemBlock+bSize!=next || bSize!=4))
+            mosError("mosCheckMemoryCoherency: handle block has illegal block size!\n");
+        b = next;
+    }
+    if (mosReadUnsafe32(b+mosMemBlockFlags)!=mosMemFlagLast)
+        mosError("mosCheckMemoryCoherency: lastBlock.flagsa must indicate last block\n");
+    if (b!=kMosMemMax-mosSizeofMemBlock)
+        mosError("mosCheckMemoryCoherency: lastBlock at unexpected address\n");
+    return true;
+}
+
+void mosMemcpy(mosPtr dst, mosPtr src, uint32_t n)
+{
+    if (gCheckMemory && !mosCheckMemoryAccess(src, n)) {
+        mosWarning("Attempt to read %n bytes from illegal address 0x%08X!\n", n, src);
+        assert(gCheckMemory<2);
+    }
+    void *hostSrc = mosToHost(src);
+
+    if (gCheckMemory && !mosCheckMemoryAccess(dst, n)) {
+        mosWarning("Attempt to write %n bytes to illegal address 0x%08X!\n", n, dst);
+        assert(gCheckMemory<2);
+    }
+    void *hostDst = mosToHost(dst);
+
+    memcpy(hostDst, hostSrc, n);
+}
+
+void mosMemcpy(void *hostDst, mosPtr src, uint32_t n)
+{
+    if (gCheckMemory && !mosCheckMemoryAccess(src, n)) {
+        mosWarning("Attempt to read %n bytes from illegal address 0x%08X!\n", n, src);
+        assert(gCheckMemory<2);
+    }
+    void *hostSrc = mosToHost(src);
+
+    memcpy(hostDst, hostSrc, n);
+}
+
+void mosMemcpy(mosPtr dst, const void *hostSrc, uint32_t n)
+{
+    if (gCheckMemory && !mosCheckMemoryAccess(dst, n)) {
+        mosWarning("Attempt to write %n bytes to illegal address 0x%08X!\n", n, dst);
+        assert(gCheckMemory<2);
+    }
+    void *hostDst = mosToHost(dst);
+
+    memcpy(hostDst, hostSrc, n);
+}
+
+/**
+ * Allocate and copy a text string from host memory to mos.
  */
 mosPtr mosNewPtr(const char *text)
 {
-    int size = strlen(text)+1;
+    uint32_t size = strlen(text)+1;
     mosPtr mp = mosMalloc(size);
-    memcpy(mosToHost(mp), text, size);
+    mosMemcpy(mp, text, size);
     return mp;
 }
-
 
 /**
  * Allocate and clear memory in the memory list.
@@ -186,7 +359,6 @@ mosPtr mosNewPtr(unsigned int size)
     memset(mosToHost(mp), 0, size);
     return mp;
 }
-
 
 /**
  * Free memory and unlink it from the memory list.
@@ -203,13 +375,13 @@ void mosDisposePtr(mosPtr mp)
  */
 unsigned int mosPtrSize(mosPtr mp)
 {
-    return mosRead32(mp-mosSizeofMemBlock+mosMemBlockSize);
+    return mosReadUnsafe32(mp-mosSizeofMemBlock+mosMemBlockSize);
 }
 
 
 /**
  * Allocate memory and a master pointer and link them into the lists.
- * FIXME: we need to keep block of handles around to make this efficient
+ * \note We could manage handles in blocks to make this more efficient.
  */
 mosHandle mosNewHandle(unsigned int size)
 {
@@ -217,7 +389,8 @@ mosHandle mosNewHandle(unsigned int size)
         return 0;
     mosPtr mp = mosNewPtr(size);
     mosPtr mh = mosMalloc(4);
-    mosWriteUnsafe32(mh, mp);
+    mosWriteUnsafe32(mh-mosSizeofMemBlock+mosMemBlockFlags, mosMemFlagHandles);
+    mosWrite32(mh, mp);
     return (mosHandle)mh;
 }
 
@@ -236,11 +409,11 @@ int mosSetHandleSize(mosHandle hdl, unsigned int newSize)
 
     // allocate a new block
     mosPtr newPtr = mosMalloc(newSize);
-    mosWriteUnsafe32(hdl, newPtr);
+    mosWrite32(hdl, newPtr);
 
     // copy the old contents over
     unsigned int size = (newSize<oldSize)?newSize:oldSize;
-    memcpy(mosToHost(newPtr), mosToHost(oldPtr), size);
+    mosMemcpy(newPtr, oldPtr, size);
 
     // free the old allocation
     mosFree(oldPtr);
@@ -250,7 +423,7 @@ int mosSetHandleSize(mosHandle hdl, unsigned int newSize)
 
 
 /**
- * Free memeory and its master pointer.
+ * Free memory and its master pointer.
  */
 void mosDisposeHandle(mosHandle hdl)
 {
@@ -261,7 +434,7 @@ void mosDisposeHandle(mosHandle hdl)
         mosFree(ptr);
     }
 
-    mosFree(hdl); // FIXME: handles!
+    mosFree(hdl);
 }
 
 
@@ -283,7 +456,7 @@ mosHandle mosRecoverHandle(mosPtr ptr)
     return 0;
 }
 
-void mosWrite64(mosPtr addr, uintptr_t value)
+void mosWriteUnsafe64(mosPtr addr, uintptr_t value)
 {
     byte *d = (byte*)mosToHost(addr);
     *d++ = value>>56;
@@ -315,12 +488,10 @@ void mosWriteUnsafe32(mosPtr addr, unsigned int value)
  */
 void mosWrite32(mosPtr addr, unsigned int value)
 {
-#if MOS_BOUNDS_CHECK
-    // FIXME: implement
-    if (!gHandleList.contains(addr, 4) && !gMemList.contains(addr, 4)) {
-        mosError("Attempt to write 4 bytes to unknown address 0x%08X (0x%08x)!\n", addr, value);
+    if (gCheckMemory && !mosCheckMemoryAccess(addr, 4)) {
+        mosWarning("Attempt to write 4 bytes to illegal address 0x%08X!\n", addr);
+        assert(gCheckMemory<2);
     }
-#endif
     mosWriteUnsafe32(addr, value);
 }
 
@@ -342,12 +513,10 @@ void mosWriteUnsafe16(mosPtr addr, unsigned short value)
  */
 void mosWrite16(mosPtr addr, unsigned short value)
 {
-#if MOS_BOUNDS_CHECK
-    // FIXME:
-    if (!gHandleList.contains(addr, 2) && !gMemList.contains(addr, 2)) {
-        mosError("Attempt to write 2 bytes to unknown address 0x%08X (0x%04x)!\n", addr, value);
+    if (gCheckMemory && !mosCheckMemoryAccess(addr, 2)) {
+        mosWarning("Attempt to write 2 bytes to illegal address 0x%08X!\n", addr);
+        assert(gCheckMemory<2);
     }
-#endif
     mosWriteUnsafe16(addr, value);
 }
 
@@ -368,16 +537,14 @@ void mosWriteUnsafe8(mosPtr addr, unsigned char value)
  */
 void mosWrite8(mosPtr addr, unsigned char value)
 {
-#if MOS_BOUNDS_CHECK
-    // FIXME:
-    if (!gHandleList.contains(addr, 1) && !gMemList.contains(addr, 1)) {
-        mosError("Attempt to write 1 byte to unknown address 0x%08X (0x%02x)!\n", addr, value);
+    if (gCheckMemory && !mosCheckMemoryAccess(addr, 1)) {
+        mosWarning("Attempt to write 1 byte to illegal address 0x%08X!\n", addr);
+        assert(gCheckMemory<2);
     }
-#endif
     mosWriteUnsafe8(addr, value);
 }
 
-uintptr_t mosRead64(mosPtr addr)
+uintptr_t mosReadUnsafe64(mosPtr addr)
 {
     uintptr_t v = 0;
     byte *s = (byte*)mosToHost(addr);
@@ -413,11 +580,10 @@ unsigned int mosReadUnsafe32(mosPtr addr)
  */
 unsigned int mosRead32(mosPtr addr)
 {
-#if MOS_BOUNDS_CHECK
-    if (!gHandleList.contains(addr, 4) && !gMemList.contains(addr, 4)) {
-        mosError("Attempt to read 4 bytes from unknown address 0x%08X!\n", addr);
+    if (gCheckMemory && !mosCheckMemoryAccess(addr, 4)) {
+        mosWarning("Attempt to read 4 bytes from illegal address 0x%08X!\n", addr);
+        assert(gCheckMemory<2);
     }
-#endif
     return mosReadUnsafe32(addr);
 }
 
@@ -441,11 +607,10 @@ unsigned short mosReadUnsafe16(mosPtr addr)
  */
 unsigned short mosRead16(mosPtr addr)
 {
-#if MOS_BOUNDS_CHECK
-    if (!gHandleList.contains(addr, 2) && !gMemList.contains(addr, 2)) {
-        mosError("Attempt to read 2 bytes from unknown address 0x%08X!\n", addr);
+    if (gCheckMemory && !mosCheckMemoryAccess(addr, 2)) {
+        mosWarning("Attempt to read 2 bytes from illegal address 0x%08X!\n", addr);
+        assert(gCheckMemory<2);
     }
-#endif
     return mosReadUnsafe16(addr);
 }
 
@@ -468,11 +633,10 @@ unsigned char mosReadUnsafe8(mosPtr addr)
  */
 unsigned char mosRead8(mosPtr addr)
 {
-#if MOS_BOUNDS_CHECK
-    if (!gHandleList.contains(addr, 1) && !gMemList.contains(addr, 1)) {
-        mosError("Attempt to read 2 bytes from unknown address 0x%08X!\n", addr);
+    if (gCheckMemory && !mosCheckMemoryAccess(addr, 1)) {
+        mosWarning("Attempt to read 1 byte from illegal address 0x%08X!\n", addr);
+        assert(gCheckMemory<2);
     }
-#endif
     return mosReadUnsafe8(addr);
 }
 

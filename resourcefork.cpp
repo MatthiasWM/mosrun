@@ -97,9 +97,11 @@ void dumpResourceMap()
             if (name!=0xffff) {
                 unsigned short rsrcNameOffset = m68k_read_memory_16((unsigned int)(theRsrc+resTable+12*j+2));
                 if (rsrcNameOffset==0xffff) continue; // unnamed resource
-                byte* rsrcName = (byte*)mosToHost(theRsrc+rsrcMapNameList+rsrcNameOffset);
-                char buf[256] = { 0 };
-                memcpy(buf, rsrcName+1, rsrcName[0]);
+                mosPtr rsrcName = theRsrc+rsrcMapNameList+rsrcNameOffset;
+                byte rsrcNameSize = mosRead8(rsrcName);
+                char buf[256];
+                mosMemcpy(buf, rsrcName+1, rsrcNameSize);
+                buf[rsrcNameSize] = 0;
                 mosTrace("           name='%s'\n", buf);
             }
             // 0x02: write to resource file
@@ -158,7 +160,7 @@ mosHandle GetResource(unsigned int myResType, unsigned short myId)
 
                         mosHandle hdl = mosNewHandle(rsrcSize);
                         mosPtr ptr = mosRead32(hdl);
-                        memcpy(mosToHost(ptr), mosToHost(theApp+rsrcData+rsrcOffset+4), rsrcSize);
+                        mosMemcpy(ptr, theApp+rsrcData+rsrcOffset+4, rsrcSize);
                         // make the resource map point to the resource handle
                         m68k_write_memory_32((unsigned int)(theRsrc+resTable+12*j+8), hdl);
                         // set breakpoints
@@ -229,7 +231,7 @@ mosHandle GetNamedResource(unsigned int myResType, const byte *pName)
 
                         mosHandle hdl = mosNewHandle(rsrcSize);
                         mosPtr ptr = mosRead32(hdl);
-                        memcpy(mosToHost(ptr), mosToHost(theApp+rsrcData+rsrcOffset+4), rsrcSize);
+                        mosMemcpy(ptr, theApp+rsrcData+rsrcOffset+4, rsrcSize);
                         // make the resource map point to the resource handle
                         m68k_write_memory_32((unsigned int)(theRsrc+resTable+12*j+8), hdl);
                         // set breakpoints
@@ -274,7 +276,7 @@ unsigned int createA5World(mosHandle hCode0)
     // create jump table
     theJumpTable = mosNewPtr(aboveA5+belowA5);
     gMosCurJTOffset = offset;
-    memcpy(mosToHost(theJumpTable+belowA5+offset), mosToHost(code0+16), length);
+    mosMemcpy(theJumpTable+belowA5+offset, code0+16, length);
     gResourceStart[19] = (unsigned int)(theJumpTable + belowA5);
     gResourceEnd[19] = (unsigned int)(theJumpTable + belowA5 + length);
     return (unsigned int)(theJumpTable + belowA5);
@@ -294,7 +296,7 @@ void readResourceMap()
     mosTrace("Rsrc Map %d bytes at 0x%08X\n", rsrcMapSize, rsrcMap);
     theRsrc = mosNewPtr(rsrcMapSize);
     theRsrcSize = rsrcMapSize;
-    memcpy(mosToHost(theRsrc), mosToHost(theApp+rsrcMap), rsrcMapSize);
+    mosMemcpy(theRsrc, theApp+rsrcMap, rsrcMapSize);
     dumpResourceMap();
 }
 

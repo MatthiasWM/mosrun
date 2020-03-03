@@ -28,24 +28,29 @@
 extern byte *MosMem;
 
 void mosMemoryInit();
+bool mosCheckMemoryCoherence();
 
 void *mosToHost(mosPtr);
 mosPtr hostToMos(void*);
 
-void mosWrite64(mosPtr addr, uintptr_t);
+void mosMemcpy(mosPtr dst, mosPtr src, uint32_t n);
+void mosMemcpy(void *dst, mosPtr src, uint32_t n);
+void mosMemcpy(mosPtr dst, const void *src, uint32_t n);
+
 void mosWrite32(mosPtr addr, unsigned int value);
 void mosWrite16(mosPtr addr, unsigned short value);
 void mosWrite8(mosPtr addr, unsigned char value);
 
-uintptr_t mosRead64(mosPtr addr);
 unsigned int mosRead32(mosPtr addr);
 unsigned short mosRead16(mosPtr addr);
 unsigned char mosRead8(mosPtr addr);
 
+void mosWriteUnsafe64(mosPtr addr, uintptr_t);
 void mosWriteUnsafe32(mosPtr addr, unsigned int value);
 void mosWriteUnsafe16(mosPtr addr, unsigned short value);
 void mosWriteUnsafe8(mosPtr addr, unsigned char value);
 
+uintptr_t mosReadUnsafe64(mosPtr addr);
 unsigned int mosReadUnsafe32(mosPtr addr);
 unsigned short mosReadUnsafe16(mosPtr addr);
 unsigned char mosReadUnsafe8(mosPtr addr);

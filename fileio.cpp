@@ -317,7 +317,7 @@ int mosPBGetFInfo(mosPtr paramBlock, bool)
     }
 
     char cFilename[2048];
-    memcpy(cFilename, mosToHost(ioNamePtr+1), fnLen);
+    mosMemcpy(cFilename, ioNamePtr+1, fnLen);
     cFilename[fnLen] = 0;
     mosDebug("mosPBGetFInfo: get info for '%s'\n", cFilename);
 
@@ -594,7 +594,7 @@ int mosPBCreate(mosPtr paramBlock, bool)
     }
 
     char cFilename[1024];
-    memcpy(cFilename, mosToHost(ioNamePtr+1), fnLen);
+    mosMemcpy(cFilename, ioNamePtr+1, fnLen);
     cFilename[fnLen] = 0;
     mosDebug("mosPBCreate: create file '%s'\n", cFilename);
 
@@ -659,7 +659,7 @@ struct FileParam { ...
     }
 
     char cFilename[1024];
-    memcpy(cFilename, mosToHost(ioNamePtr+1), fnLen);
+    mosMemcpy(cFilename, ioNamePtr+1, fnLen);
     cFilename[fnLen] = 0;
     mosDebug("mosPBHOpen: open file '%s'\n", cFilename);
 
@@ -718,7 +718,7 @@ int mosPBDelete(mosPtr paramBlock, bool)
     }
 
     char cFilename[1024];
-    memcpy(cFilename, mosToHost(ioNamePtr+1), fnLen);
+    mosMemcpy(cFilename, ioNamePtr+1, fnLen);
     cFilename[fnLen] = 0;
 
     mosDebug("mosPBDelete: deleteing file '%s'\n", cFilename);

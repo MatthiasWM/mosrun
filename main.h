@@ -70,6 +70,7 @@ extern mosPtr theJumpTable;
 
 extern byte gFilterStdoutDataFrom;
 extern byte gFilterStdoutDataTo;
+extern byte gCheckMemory; // 0=don;t check, 1=check, 2=check and exit
 
 const unsigned int kMosMemMax        = 2*1024*1024;  // Size of emulated RAM
 
@@ -87,6 +88,8 @@ const unsigned int kMosRndSeed        = 0x0156;  // random number seed (long)
 const unsigned int kMosTicks          = 0x016A;  // ticks since last boot (unsigned long)
 const unsigned int kMosDeskHook       = 0x0A6C;  // hook for painting desktop (pointer)
 const unsigned int kMosMBarHeight     = 0x0BAA;  // height of menu bar (integer)
+
+const mosPtr kSystemHeapStart = 0x00001E00; // freely available RAM after this address
 
 void hexDump(mosPtr a, unsigned int n);
 

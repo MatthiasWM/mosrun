@@ -74,7 +74,7 @@ void hexDump(mosPtr a, unsigned int n)
         mosTrace("%08X: ", a);
         for (i=0; i<16; i++) {
             if (i<n) {
-                byte b = mosRead8(a+i);
+                byte b = mosReadUnsafe8(a+i);
                 mosTrace("%02X ", b);
             } else {
                 mosLog("   ");
@@ -82,7 +82,7 @@ void hexDump(mosPtr a, unsigned int n)
         }
         for (i=0; i<16; i++) {
             if (i<n) {
-                byte b = mosRead8(a+i);
+                byte b = mosReadUnsafe8(a+i);
                 mosTrace("%c", (b>=32 && b<127)?b:'.');
             } else {
                 mosTrace(" ");
@@ -963,7 +963,7 @@ void trapGoNative(unsigned short instr)
 {
     unsigned int pc = m68k_get_reg(0L, M68K_REG_PC);
 
-    void (*nativeCodeEntry)(uint16_t) = (void (*)(uint16_t))mosRead64(pc+4);
+    void (*nativeCodeEntry)(uint16_t) = (void (*)(uint16_t))mosReadUnsafe64(pc+4);
     nativeCodeEntry(gCurrentTrap);
 
     pc = pc + 12; // skip alignment space and native target address
@@ -1029,7 +1029,7 @@ mosPtr createGlue(unsigned short index, void (*nativeCodeEntry)(uint16_t))
     // FIXME: unaligned format
     mosPtr p = mosNewPtr(16);
     mosWrite16(p+ 0, 0xAFFF);           // trap native
-    mosWrite64(p+ 4, (uintptr_t)nativeCodeEntry);  // pointer into host memory
+    mosWriteUnsafe64(p+ 4, (uintptr_t)nativeCodeEntry);  // pointer into host memory
     mosWrite16(p+12, 0x4E75);           // rts
 
     if (index) {

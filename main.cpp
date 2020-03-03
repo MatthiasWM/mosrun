@@ -101,6 +101,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <libgen.h>
+#include <assert.h>
 
 // Include our own interfaces
 
@@ -135,6 +136,8 @@ const char *gMosHelpText =
 "  ---verbosity=xxx : set verbosity level to trace, debug, log, warn or err\n"
 "  ---stdout-raw : do not filter stdout (default converts form Mac to Unix)\n"
 "  ---log=filename : log all messages to a file\n"
+"  ---checkmem : enable memory access checking\n"
+"  ---checkmemstrict : check memory and exit on fault\n"
 ;
 
 // application global variables
@@ -144,6 +147,7 @@ unsigned int theAppSize = 0;
 mosPtr theRsrc = 0;
 unsigned int theRsrcSize = 0;
 mosPtr theJumpTable = 0;
+byte gCheckMemory = 0;
 
 byte gFilterStdoutDataFrom = MOS_TYPE_MAC;
 byte gFilterStdoutDataTo   = MOS_TYPE_UNIX;
@@ -259,7 +263,7 @@ int loadEmbeddedApp(const char*)
     if (gAppResource) {
         theAppSize = gAppResourceSize;
         theApp = mosNewPtr(theAppSize);
-        memcpy(mosToHost(theApp), gAppResource, gAppResourceSize);
+        mosMemcpy(theApp, gAppResource, gAppResourceSize);
         readResourceMap();
         mosHandle code0 = GetResource('CODE', 0);
         if (code0==0) {
@@ -404,6 +408,10 @@ int setupSystem(int argc, const char **argv, const char **envp)
             if (strcmp(argv[i], "---help")==0) {
                 puts(gMosHelpText);
                 exit(0);
+            } else if (strcmp(arg, "---checkmem")==0) {
+                gCheckMemory = 1;
+            } else if (strcmp(arg, "---checkmemstrict")==0) {
+                gCheckMemory = 2;
             } else if (strcmp(arg, "---verbosity=trace")==0) {
                 mosLogVerbosity(MOS_VERBOSITY_TRACE);
                 mosDebug("Setting verbosity to TRACE\n");

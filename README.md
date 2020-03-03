@@ -56,18 +56,18 @@ Usage
 If mosrun was precompiled with the resource fork of an MPW tool, just rename 
 mosrun to the name of the original tool and it will behave like that tool.
 
-Example: > ARM6asm test.s
+Example: `ARM6asm test.s`
 
 As a stand-alone tool, the first argument should be the name of the MPW tool.
 Note that MPW tools make intense use of the Resource Fork. If you did not 
 copy the tool's resource fork, mosrun will fail to run.
 
-Example: > mosrun MPWTools/ARM6asm test.s
+Example: `mosrun MPWTools/ARM6asm test.s`
 
 In either case, if the first argument is '---run' (triple dash option), mosrun
 will try to load the MPW tool in the following argument.
 
-Example: > mosrun ---run MPWTools/ARM6asm test.s
+Example: `mosrun ---run MPWTools/ARM6asm test.s`
 
 Further triple dash options will follow, concerning the conversion of 
 file names and data streams.

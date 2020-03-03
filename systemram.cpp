@@ -79,10 +79,10 @@ unsigned int mosGetMemError()
  */
 unsigned int m68k_read_memory_8(unsigned int address)
 {
-    if (address>=0x1E00) {
+    if (address>=kSystemHeapStart) {
         return mosRead8(address);
     }
-    if (address<0x1E00) {
+    if (address<kSystemHeapStart) {
         const char *rem = "";
         const char *var = gvarName(address, &rem);
         mosTrace("Read.b 0x%04x: %s %s\n", address, var, rem);
@@ -105,10 +105,10 @@ unsigned int m68k_read_memory_16(unsigned int address)
     if (gPendingBreakpoint && gPendingBreakpoint->address==address) {
         return gPendingBreakpoint->originalCmd;
     }
-    if (address>=0x1E00) {
+    if (address>=kSystemHeapStart) {
         return mosRead16(address);
     }
-    if (address<0x1E00) {
+    if (address<kSystemHeapStart) {
         const char *rem = "";
         const char *var = gvarName(address, &rem);
         mosTrace("Read.w 0x%04x: %s %s\n", address, var, rem);
@@ -133,10 +133,10 @@ unsigned int m68k_read_memory_16(unsigned int address)
  */
 unsigned int m68k_read_memory_32(unsigned int address)
 {
-    if (address>=0x1E00) {
+    if (address>=kSystemHeapStart) {
         return mosRead32(address);
     }
-    if (address<0x1E00) {
+    if (address<kSystemHeapStart) {
         const char *rem = "";
         const char *var = gvarName(address, &rem);
         mosTrace("Read.l 0x%04x: %s %s\n", address, var, rem);
@@ -196,20 +196,18 @@ unsigned int m68k_read_disassembler_32(unsigned int address)
  */
 void m68k_write_memory_8(unsigned int address, unsigned int value)
 {
-    if (address>=0x1E00) {
-        mosWriteUnsafe8(address, value);
-        return;
-    }
-    if (address<0x1E00) {
+    if (address>=kSystemHeapStart) {
+        mosWrite8(address, value);
+    } else {
         const char *rem = "";
         const char *var = gvarName(address, &rem);
         mosTrace("Write.b 0x%04x = 0x%02X: %s %s\n", address, value & 0xff, var, rem);
-    }
-    switch (address) {
-        case 0x0a5e: gMosResLoad = value; break; // ResLoad       0A5E  word  Auto-load feature
-        default:
-            mosDebug("Writing unsupported RAM.b address 0x%08X\n", address);
-            break;
+        switch (address) {
+            case 0x0a5e: gMosResLoad = value; break; // ResLoad       0A5E  word  Auto-load feature
+            default:
+                mosDebug("Writing unsupported RAM.b address 0x%08X\n", address);
+                break;
+        }
     }
 }
 
@@ -219,19 +217,17 @@ void m68k_write_memory_8(unsigned int address, unsigned int value)
  */
 void m68k_write_memory_16(unsigned int address, unsigned int value)
 {
-    if (address>=0x1E00) {
-        mosWriteUnsafe16(address, value);
-        return;
-    }
-    if (address<0x1E00) {
+    if (address>=kSystemHeapStart) {
+        mosWrite16(address, value);
+    } else {
         const char *rem = "";
         const char *var = gvarName(address, &rem);
         mosTrace("Write.w 0x%04x = 0x%04X: %s %s\n", address, value & 0xffff, var, rem);
-    }
-    switch (address) {
-        default:
-            mosDebug("Writing unsupported RAM.w address 0x%08X\n", address);
-            break;
+        switch (address) {
+            default:
+                mosDebug("Writing unsupported RAM.w address 0x%08X\n", address);
+                break;
+        }
     }
 }
 
@@ -241,19 +237,18 @@ void m68k_write_memory_16(unsigned int address, unsigned int value)
  */
 void m68k_write_memory_32(unsigned int address, unsigned int value)
 {
-    if (address>=0x1E00) {
-        mosWriteUnsafe32(address, value);
+    if (address>=kSystemHeapStart) {
+        mosWrite32(address, value);
         return;
-    }
-    if (address<0x1E00) {
+    } else {
         const char *rem = "";
         const char *var = gvarName(address, &rem);
         mosTrace("Write.l 0x%04x = 0x%08X: %s %s\n", address, value, var, rem);
-    }
-    switch (address) {
-        default:
-            mosDebug("Writing unsupported RAM.l address 0x%08X\n", address);
-            break;
+        switch (address) {
+            default:
+                mosDebug("Writing unsupported RAM.l address 0x%08X\n", address);
+                break;
+        }
     }
 }
 

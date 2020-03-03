@@ -19,6 +19,9 @@
  The latest source code can be found at http://code.google.com/p/dynee5/
  */
 
+
+#include "main.h"
+
 #include <stdio.h>
 
 
@@ -1782,7 +1785,7 @@ GVars gvarLUT[] = {
     { "PmgrHandle", 0x0DC8 },
     { "LayerPalette", 0x0DCC },
     { "ToolTable", 0x0E00 },
-    { "SystemHeap", 0x1E00 },
+    { "SystemHeap", kSystemHeapStart }, // 0x00001E00
     { 0, 0xffffffff, 0 }
 };
 
@@ -1793,7 +1796,7 @@ GVars gvarLUT[] = {
 const char *gvarName(unsigned int id, const char ** description)
 {
     if (description) *description = "";
-    if (id>0x1e00) {
+    if (id>kSystemHeapStart) {
         return "NOT_A_LOCAL_VARIABLE";
     }
     GVars *t = gvarLUT;
