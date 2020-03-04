@@ -617,3 +617,30 @@ struct ttysize {
  *            O_APPEND     32      All writes happen at EOF (optional feature)
 
 
+Full self install:
+
+Web browser access
+http://www.unna.org/view.php?/development/NewtonDev/
+
+Download link
+http://www.unna.org/unna/development/NewtonDev/NewtonDev.sit
+
+--- http://www.unna.org/unna/apple/development/DDKs/FullLanternDDK.sit
+Lantern Data Link Layer Tools
+(many include files, sample Ethernet driver, docs,
+MP 2100 ROM image in:
+"Lantern DDK 1.0 Beta/Debugging/MP2000 ROM Image (717006)"
+EMate ROM image in:
+"Lantern DDK 1.0 Beta/Debugging"
+)
+
+--- http://www.unna.org/unna/apple/development/DDKs/Newton_PCMCIA_DDK.sit.hqx
+Lots of header files.
+MPW Binaries in "Newton PCMCIA DDK/NCT->DDK/Put files in NCT_Folder Tools"
+ Rex, ProtocolGenTool, ProtocolGen, Pram, Packer, NCTProjectMenuAddons,
+ NCTCreateProject, NCTBuildREX, DefineDDKVariables, DDKBuildMakefile.post
+More in "/Users/matt/Downloads/Newton PCMCIA DDK/NCT->DDK/Also put in NCT_Folder Tools"
+ ARMLink, ARMCpp
+
+
+

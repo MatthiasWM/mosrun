@@ -73,7 +73,7 @@ unsigned int trapExitApp = 0;
  */
 void hexDump(mosPtr a, unsigned int n)
 {
-    int i = 0;
+    unsigned int i = 0;
     for (;;) {
         mosTrace("%08X: ", a);
         for (i=0; i<16; i++) {
@@ -125,7 +125,7 @@ mosPtr *tncTable = 0;
  *
  * \todo set gMosResErr as needed
  */
-void trapGetResource(unsigned short instr)
+void trapGetResource(unsigned short )
 {
     unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
 
@@ -153,7 +153,7 @@ void trapGetResource(unsigned short instr)
  *
  * \todo set gMosResErr as needed
  */
-void trapLoadResource(unsigned short instr)
+void trapLoadResource(unsigned short )
 {
     unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
 
@@ -178,7 +178,7 @@ void trapLoadResource(unsigned short instr)
  *
  * \todo set gMosResErr as needed
  */
-void trapGetNamedResource(unsigned short instr)
+void trapGetNamedResource(unsigned short )
 {
     unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
 
@@ -208,7 +208,7 @@ void trapGetNamedResource(unsigned short instr)
  *
  * \todo this must return the size of the resource *in the file*, not in memory!
  */
-void trapSizeResource(unsigned short instr)
+void trapSizeResource(unsigned short )
 {
     unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
 
@@ -469,7 +469,7 @@ void trapSetTrapAddress(unsigned short)
  * \todo separate the interface from the code.
  * \todo actually we need to fix *all* jump table entries for this particular ID!
  */
-void trapLoadSeg(unsigned short instr)
+void trapLoadSeg(unsigned short )
 {
     unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
 
@@ -517,7 +517,7 @@ void trapLoadSeg(unsigned short instr)
  * \todo set MemErr
  * \todo add support for these flags (it's all already in the memory manager)
  */
-void trapHGetState(unsigned short instr) {
+void trapHGetState(unsigned short ) {
     m68k_set_reg(M68K_REG_D0, 0x80); // locked memory // TODO: may need more flags!
 }
 
@@ -527,7 +527,7 @@ void trapHGetState(unsigned short instr) {
  *
  * There is no benefit to moving handles high in memory in this simulation.
  */
-void trapMoveHHi(unsigned short instr) {
+void trapMoveHHi(unsigned short ) {
     // nothing to do here
 }
 
@@ -537,7 +537,7 @@ void trapMoveHHi(unsigned short instr) {
  *
  * We never move memory, so there is no reason to implement this.
  */
-void trapHLock(unsigned short instr) {
+void trapHLock(unsigned short ) {
     // nothing to do here
 }
 
@@ -547,7 +547,7 @@ void trapHLock(unsigned short instr) {
  *
  * We never move memory, so there is no reason to implement this.
  */
-void trapHUnlock(unsigned short instr) {
+void trapHUnlock(unsigned short ) {
     // nothing to do here
 }
 
@@ -557,7 +557,7 @@ void trapHUnlock(unsigned short instr) {
  *
  * This function has been obsolete since 1992.
  */
-void trapStripAddress(unsigned short instr) {
+void trapStripAddress(unsigned short ) {
     // nothing to do here
 }
 
@@ -585,7 +585,7 @@ void trapStripAddress(unsigned short instr) {
  * 0x37: ??
  * 0x3A: ??
  */
-void trapOSDispatch(unsigned short instr)
+void trapOSDispatch(unsigned short )
 {
     unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
 
@@ -639,7 +639,7 @@ void trapOSDispatch(unsigned short instr)
  * D0 = number of seconds since midnight Jan 1, 1904
  * A0 = pointer to DateTimeRec structure
  */
-void trapSecondsToDate(unsigned short instr)
+void trapSecondsToDate(unsigned short )
 {
     unsigned int seconds = m68k_get_reg(0L, M68K_REG_D0);
     unsigned int datetime = m68k_get_reg(0L, M68K_REG_A0);
@@ -680,7 +680,7 @@ unsigned int mosTickCount()
 /**
  * [a975] Return the number of ticks (60th of a second since this computer was switched on.
  */
-void trapTickCount(unsigned short instr)
+void trapTickCount(unsigned short )
 {
     unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
     m68k_write_memory_32(sp+4, mosTickCount());
@@ -692,7 +692,7 @@ void trapTickCount(unsigned short instr)
  *
  * We never purge blocks in the simulation.
  */
-void trapHPurge(unsigned short instr)
+void trapHPurge(unsigned short )
 {
     // nothing to do here
 }
@@ -703,7 +703,7 @@ void trapHPurge(unsigned short instr)
  *
  * We never release resources.
  */
-void trapReleaseResource(unsigned short instr)
+void trapReleaseResource(unsigned short )
 {
     unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
 
@@ -723,7 +723,7 @@ void trapReleaseResource(unsigned short instr)
  *
  * We only support a single res file, so return 1.
  */
-void trapCurResFile(unsigned short instr)
+void trapCurResFile(unsigned short )
 {
     unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
 
@@ -742,7 +742,7 @@ void trapCurResFile(unsigned short instr)
  *
  * We support only a single Resource file, so, yeah, OK.
  */
-void trapHomeResFile(unsigned short instr)
+void trapHomeResFile(unsigned short )
 {
     unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
 
@@ -772,7 +772,7 @@ void trapHomeResFile(unsigned short instr)
  *
  * We return 0 in D0 and 0 in (A0) and cross our fingers.
  */
-void trapReadXPRam(unsigned short instr)
+void trapReadXPRam(unsigned short )
 {
     unsigned int resultPtr = m68k_get_reg(0L, M68K_REG_A0);
     if (resultPtr) {
@@ -786,7 +786,7 @@ void trapReadXPRam(unsigned short instr)
  * [A00C] _GetFileInfo.
  * int mosPBGetFInfo(unsigned int paramBlock, bool async)
  */
-void trapGetFileInfo(unsigned short instr)
+void trapGetFileInfo(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -801,7 +801,7 @@ void trapGetFileInfo(unsigned short instr)
  * [A00D] _SetFileInfo.
  * int mosPBSetFInfo(unsigned int paramBlock, bool async)
  */
-void trapSetFileInfo(unsigned short instr)
+void trapSetFileInfo(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -816,7 +816,7 @@ void trapSetFileInfo(unsigned short instr)
  * [A008] _Create
  * FUNCTION PBCreate (paramBlock: ParmBlkPtr; async: BOOLEAN) : OSErr;
  */
-void trapCreate(unsigned short instr)
+void trapCreate(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -831,7 +831,7 @@ void trapCreate(unsigned short instr)
  * [A012] _SetEOF
  * FUNCTION PBSetEOF (paramBlock: ParmBlkPtr; async: BOOLEAN) : OSErr;
  */
-void trapSetEOF(unsigned short instr)
+void trapSetEOF(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -846,7 +846,7 @@ void trapSetEOF(unsigned short instr)
  * [A012] _SetEOF
  * FUNCTION PBSetEOF (paramBlock: ParmBlkPtr; async: BOOLEAN) : OSErr;
  */
-void trapSetFPos(unsigned short instr)
+void trapSetFPos(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -861,7 +861,7 @@ void trapSetFPos(unsigned short instr)
  * [A002] _Read
  * FUNCTION PBRead (paramBlock: ParmBlkPtr; async: BOOLEAN) : OSErr;
  */
-void trapRead(unsigned short instr)
+void trapRead(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -876,7 +876,7 @@ void trapRead(unsigned short instr)
  * [A003] _Write
  * FUNCTION PBWrite (paramBlock: ParmBlkPtr; async: BOOLEAN) : OSErr;
  */
-void trapWrite(unsigned short instr)
+void trapWrite(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -891,7 +891,7 @@ void trapWrite(unsigned short instr)
  * [A001] _Close
  * FUNCTION PBClose (paramBlock: ParmBlkPtr; async: BOOLEAN) : OSErr;
  */
-void trapClose(unsigned short instr)
+void trapClose(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -906,7 +906,7 @@ void trapClose(unsigned short instr)
  * [A009] _Delete
  * FUNCTION PBClose (paramBlock: ParmBlkPtr; async: BOOLEAN) : OSErr;
  */
-void trapDelete(unsigned short instr)
+void trapDelete(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -920,7 +920,7 @@ void trapDelete(unsigned short instr)
 /**
  * [A060] _FSDispatch
  */
-void trapFSDispatch(unsigned short instr)
+void trapFSDispatch(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int function = m68k_get_reg(0L, M68K_REG_D0);
@@ -934,7 +934,7 @@ void trapFSDispatch(unsigned short instr)
 /**
  * [A200] _HOpen
  */
-void trapHOpen(unsigned short instr)
+void trapHOpen(unsigned short )
 {
     unsigned int paramBlock = m68k_get_reg(0L, M68K_REG_A0);
     unsigned int async = 0; // If bit 10 of the instruction is set, it is async.
@@ -956,7 +956,7 @@ void trapHOpen(unsigned short instr)
  *
  * No inputs or outputs.
  */
-void trapUninmplemented(unsigned short instr) {
+void trapUninmplemented(unsigned short ) {
     // FIXME: $a01f; opcode 1010 (_DisposePtr)
     mosError("Unimplemented trap 0x%08X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
 }
@@ -970,7 +970,7 @@ void trapUninmplemented(unsigned short instr) {
  * The current PC is used as a pointer to the TrapNativeCall structure, which
  * then contains the pointer to the native function and the RTS instruction.
  */
-void trapGoNative(unsigned short instr)
+void trapGoNative(unsigned short )
 {
     unsigned int pc = m68k_get_reg(0L, M68K_REG_PC);
 
@@ -993,7 +993,7 @@ void trapGoNative(unsigned short instr)
  * After hitting a breakpoint, the original code is put back into place for
  * the next emulation step. After that, the breakpoint is reinstated.
  */
-void trapBreakpoint(unsigned short instr)
+void trapBreakpoint(unsigned short )
 {
     unsigned int pc = m68k_get_reg(0L, M68K_REG_PC);
 

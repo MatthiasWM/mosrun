@@ -441,21 +441,26 @@ void mosDisposeHandle(mosHandle hdl)
 
 
 /**
- * Find the master pointer using a memory pointer.
- *
- * \todo this function has not been verified.
+ Return the handle that points to a relocatable block of memory.
+
+ \param addr address of some previously allocated block of memory
+ \return the handle for tha block, or 0 if there is no handle
  */
-mosHandle mosRecoverHandle(mosPtr ptr)
+mosHandle mosRecoverHandle(mosPtr addr)
 {
-//    MosBlock *me = gHandleList.first();
-//    while (me) {
-//        mosHandle hdl = mosToPtr(me);
-//        if (mosRead32(hdl)==ptr)
-//            return hdl;
-//        me = gHandleList.next(me);
-//    }
-    // FIXME: mark handles so we can walk the list of handles
-    return 0;
+    mosPtr b = mosMemBlockStart;
+    for (;;) {
+        mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
+        uint32_t flags = mosReadUnsafe32(b+mosMemBlockFlags);
+        if (flags==mosMemFlagHandles) {
+            mosPtr ptr = mosRead32(b+mosSizeofMemBlock);
+            if (ptr==addr)
+                return b+mosSizeofMemBlock;
+        }
+        b = next;
+        if (b==0)
+            return 0;
+    }
 }
 
 void mosWriteUnsafe64(mosPtr addr, uintptr_t value)

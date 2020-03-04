@@ -329,7 +329,7 @@ int runApp()
  *
  * \todo This function must be split up. It's much too long.
  */
-int setupSystem(int argc, const char **argv, const char **envp)
+int setupSystem(int argc, const char **argv, const char**)
 {
     int runExternal = 0;
     int i;

@@ -100,7 +100,7 @@ char *mosDataUnixToMac(const char *text, unsigned int &size)
 {
     // The Mac string can nevr be longer than the Unix string
     const char *s = text;
-    int i, count = size;
+    unsigned int i, count = size;
     // now we have the size. Make sure we have space
     allocateBuffer(count+1);
     // copy and convert characters
@@ -155,7 +155,7 @@ char *mosDataMacToUnix(const char *text, unsigned int &size)
 {
     // the Unix string is potentialy longer than the Mac string, so start counting
     const char *s = text;
-    int i, count = 0;
+    unsigned int i, count = 0;
     for (i=0;i<size;i++) {
         byte c = (byte)*s++;
         if (c<128) {
