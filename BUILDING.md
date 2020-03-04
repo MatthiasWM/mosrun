@@ -20,13 +20,13 @@ Table of Contents
 Build Variants
 --------------
 
-How to compile with integrated resources.
+(TODO: How to compile with integrated resources.)
 
 
 CMake
 -----
 
-mosrun uses CMake for building the exectable on all platforms.
+mosrun uses _CMake_ for building the exectable on all platforms.
 
 
 MacOS
@@ -122,7 +122,7 @@ I have tested this setup in WIndows 10. You will need a bunch of software:
   available from Microsoft in a free version, but takes quite a while to install. Cygwin in
   MinGW are more Unix-like alternatives
 
-### Downloading the source code
+#### Downloading the source code
 
 After installing _TortoiseGIT_, you will find some new menu items in your _File Explorer_
 menus. Navigate into your development directory. As an example, I created 
@@ -137,7 +137,11 @@ which should be prefilled with your dev dir, in my case `C:\Users\matt\dev\mosru
 
 Click _OK_, let it download the files, then click _Close_.
 
-### Creating the VisualC Solution using CMake
+
+MSWindows: VisualC
+-----------------
+
+#### Creating the VisualC Solution using CMake
 
 Launch _CMake_ and fill out the form:
 * _Where is the source code:_ `C:/Users/matt/dev/mosrun`
@@ -150,10 +154,6 @@ _CMake_ will ask you to _Specify the Generator for this project_. Choose
 
 Back in the _CMake_ window, click _Generate_ and _CMake_ will create all files need
 by _VisualC_. 
-
-
-MSWindows: VisualC
------------------
 
 Now you can either launch _VisualC 2017_ and navigate to 
 `C:/Users/matt/dev/mosrun/Build/VisualC/mosrun.sln`, or simply double-click
