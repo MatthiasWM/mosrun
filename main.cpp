@@ -95,12 +95,14 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/xattr.h>
+#include <unistd.h>
+#include <libgen.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <limits.h>
-#include <libgen.h>
 #include <assert.h>
 
 // Include our own interfaces
@@ -157,7 +159,11 @@ byte gFilterStdoutDataTo   = MOS_TYPE_UNIX;
  */
 const char *toolPath(const char *aName)
 {
-    static char path[PATH_MAX];
+#ifdef WIN32
+    static char path[_MAX_PATH];
+#else
+	static char path[PATH_MAX];
+#endif
     struct stat st;
 
     if (aName[0] == '/')
@@ -214,14 +220,28 @@ int loadCodeFromFile(const char *path)
 
 int loadCodeFromDotFile(const char *path)
 {
-    static char dotfilePath[PATH_MAX];
-    char *dir = strdup(path);
+#if WIN32
+	static char dotfilePath[_MAX_PATH];
+	char drive[_MAX_DRIVE];
+	char dir[_MAX_DIR];
+	char fname[_MAX_FNAME];
+	char ext[_MAX_EXT];
+	_splitpath(path, drive, dir, fname, ext);
+	strcpy(dotfilePath, drive);
+	strcat(dotfilePath, dir);
+	strcat(dotfilePath, "._");
+	strcat(dotfilePath, fname);
+	strcat(dotfilePath, ext);
+#else
+	static char dotfilePath[PATH_MAX];
+	char *dir = strdup(path);
     char *base = strdup(path);
     strcpy(dotfilePath, dirname(dir));
     strcat(dotfilePath, "/._");
     strcat(dotfilePath, basename(base));
     free(dir);
     free(base);
+#endif
     return loadCodeFromFile(dotfilePath);
 }
 

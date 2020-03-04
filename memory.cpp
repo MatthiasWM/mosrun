@@ -29,7 +29,9 @@
 
 #include <stdlib.h>
 #include <string.h>
+#ifndef WIN32
 #include <arpa/inet.h>
+#endif
 #include <assert.h>
 
 // This is the emulated RAM.

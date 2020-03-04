@@ -39,7 +39,11 @@
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>
+#ifdef WIN32
+#include <windows.h>
+#else
 #include <sys/time.h>
+#endif
 
 // Include our own interfaces
 
@@ -659,9 +663,16 @@ void trapSecondsToDate(unsigned short instr)
  */
 unsigned int mosTickCount()
 {
+#ifdef WIN32
+	SYSTEMTIME time;
+	GetSystemTime(&time);
+	unsigned int ticks = time.wMilliseconds * 60 / 1000
+		+ 60 * (time.wSecond + 60 * time.wMinute + 60 * 60 * time.wHour);
+#else
     struct timeval tp;
     gettimeofday(&tp, 0L);
     unsigned int ticks = tp.tv_sec*60 + tp.tv_usec/(1000000/60);
+#endif
     return ticks;
 }
 
