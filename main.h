@@ -22,9 +22,8 @@
 #ifndef mosrun_main_h
 #define mosrun_main_h
 
-
+#include "debug_break.h"
 #include <stdint.h>
-
 
 #define MOS_BOUNDS_CHECK 0
 

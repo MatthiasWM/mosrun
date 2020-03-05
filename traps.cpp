@@ -625,6 +625,7 @@ void trapOSDispatch(unsigned short )
         }
         default:
             mosError("Unimplemented OSDispatch 0x%02X\n", selector);
+            debug_break();
             return;
     }
 
@@ -959,6 +960,7 @@ void trapHOpen(unsigned short )
 void trapUninmplemented(unsigned short ) {
     // FIXME: $a01f; opcode 1010 (_DisposePtr)
     mosError("Unimplemented trap 0x%08X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
+    debug_break();
 }
 
 

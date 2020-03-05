@@ -31,6 +31,7 @@ add_executable(mosrun
     ./musashi331/m68kdasm.c
     ./musashi331/m68kcpu.c
     ./musashi331/m68kopdm.c
+    debug_break.h
     )
 install(TARGETS mosrun RUNTIME DESTINATION bin)
 

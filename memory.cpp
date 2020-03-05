@@ -109,7 +109,7 @@ mosPtr mosMalloc(uint size)
         mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
         if (next==0) {
             fprintf(stderr, "MOSMalloc failed: out of memory\n");
-            assert(1);
+            assert(0);
         }
         uint32_t flags = mosReadUnsafe32(b+mosMemBlockFlags);
         if (flags==mosMemFlagFree) { // a free block

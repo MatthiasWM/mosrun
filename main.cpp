@@ -249,6 +249,7 @@ int loadCodeFromDotFile(const char *path)
  * Load the executable part of a file from the resource fork.
  *
  * \todo The three loader functions need cleaning, error checking, diagnostic messages, and general refactoring
+ * \todo We can also try "path/..namedfork/rsrc"
  */
 int loadExternalApp(const char *path)
 {
@@ -544,6 +545,7 @@ void setBreakpoints()
  */
 int main(int argc, const char **argv, const char **envp)
 {
+    //mosLogVerbosity(MOS_VERBOSITY_LOG);
     //mosLogVerbosity(MOS_VERBOSITY_TRACE);
     mosMemoryInit();
 #ifdef MOS_UNITTESTS
