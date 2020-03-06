@@ -140,8 +140,6 @@ Tested and Untested Tools
 |                   |    | This tool works and creats object files, but needs to be tested and documented. |
 | ARM6c             |  i | Norcroft Newton OS Newton C vsn 4.62b1, Feb 20 1995 |
 |                   |    | This tool launches and needs to be tested and documented. |
-| ARMCFront         |  e | ARM C Compiler Frontend |
-|                   |    | FIXME: this tool crashes! |
 | ARMCpp            |  i | Norcroft Newton OS Newton C++ vsn 0.43/C4.68, Jul 12 1996 |
 |                   |    | This tool launches and needs to be tested and documented. |
 | ARMLink           |  i | ARM Linker vsn 5.04, Advanced RISC Machines rel195, Apr 29 1996 |
@@ -154,6 +152,8 @@ Tested and Untested Tools
 |                   |    | At least we now know that Elvis is dead. |
 | Rex               |  i | Tool to bild a ROM Extension file form various parts using a configuration file |
 |                   |    | Launches and displays help text, not yet tested. |
+| ARMCFront         |  x | Outdated ARM C++-to-C compiler |
+|                   |    | No need to support this. |
 | CallFinder        |  x | No documentation found. |
 |                   |    | Uses graphics calls, s not emulated in the command line. |
 | CoolRequest       |  x | No documentation found. |
