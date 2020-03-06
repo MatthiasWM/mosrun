@@ -134,9 +134,9 @@ Tested and Untested Tools
 
 | Tool              |    | Description / Status                                |
 |-------------------|----|-----------------------------------------------------|
-| AIFtoNTK          |  I | This tool converts an ARM Image Format (AIF) file into an NTK “streamed frame” file. |
+| AIFtoNTK          |  i | This tool converts an ARM Image Format (AIF) file into an NTK “streamed frame” file. |
 |                   |    | This tool launches and needs to be tested and documented. |
-| ARM6asm           |  i | ARM AOF Macro Assembler 2.21, May 10 1994 |
+| ARM6asm           | OK | ARM AOF Macro Assembler 2.21, May 10 1994 |
 |                   |    | This tool works and creats object files, but needs to be tested and documented. |
 | ARM6c             |  i | Norcroft Newton OS Newton C vsn 4.62b1, Feb 20 1995 |
 |                   |    | This tool launches and needs to be tested and documented. |
@@ -154,26 +154,26 @@ Tested and Untested Tools
 |                   |    | At least we now know that Elvis is dead. |
 | Rex               |  i | Tool to bild a ROM Extension file form various parts using a configuration file |
 |                   |    | Launches and displays help text, not yet tested. |
-| CallFinder        |  - | No documentation found. |
+| CallFinder        |  x | No documentation found. |
 |                   |    | Uses graphics calls, s not emulated in the command line. |
-| CoolRequest       |  - | No documentation found. |
+| CoolRequest       |  x | No documentation found. |
 |                   |    | Dialog boxes are not emulated in the command line. |
-| LinkMenu          |  - | No documentation found. |
+| LinkMenu          |  x | No documentation found. |
 |                   |    | Menu items are not emulated in the command line. |
-| Makemake          |  - | Probably generates a Makefile for various type of projects. |
+| Makemake          |  x | Probably generates a Makefile for various type of projects. |
 |                   |    | This tool launches but has no description in the help page, so we don't know what it does. |
-| Packer            |  - | No documentation found. |
+| Packer            |  x | No documentation found. |
 |                   |    | This tool launches but has no description in the help page, so we don't know what it does. |
-| Pram              |  - | No documentation found. |
+| Pram              |  x | No documentation found. |
 |                   |    | This tool launches but has no description in the help page, so we don't know what it does. |
-| SetMenuItem       |  - | SetMenuItem can change the title and/or style of an installed MPW user menu item. |
+| SetMenuItem       |  x | SetMenuItem can change the title and/or style of an installed MPW user menu item. |
 |                   |    | Menu items are not emulated in the command line. |
 
 * OK = tested and working
 * i = included, but not yet tested
-* w = minor buggy, needs to be looked at
+* w = minor bugs, needs to be looked at
 * e = crashing, needs to be fixed
-* - = will not be included or supported
+* x = will not be included or supported
 
 Alternatives to mosrun
 ----------------------
