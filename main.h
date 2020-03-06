@@ -24,6 +24,10 @@
 
 #include "debug_break.h"
 #include <stdint.h>
+#ifdef WIN32
+#define PATH_MAX _MAX_PATH
+#endif
+
 
 #define MOS_BOUNDS_CHECK 0
 
@@ -66,6 +70,9 @@ extern unsigned int theAppSize;
 extern mosPtr theRsrc;
 extern unsigned int theRsrcSize;
 extern mosPtr theJumpTable;
+
+extern char *gRsrcFileBaseName;
+void writeRsrcFiles(const char *basename);
 
 extern byte gFilterStdoutDataFrom;
 extern byte gFilterStdoutDataTo;

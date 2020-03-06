@@ -154,6 +154,8 @@ byte gCheckMemory = 0;
 byte gFilterStdoutDataFrom = MOS_TYPE_MAC;
 byte gFilterStdoutDataTo   = MOS_TYPE_UNIX;
 
+char *gRsrcFileBaseName = nullptr;
+
 /**
  * Find native tools in load path
  */
@@ -460,6 +462,9 @@ int setupSystem(int argc, const char **argv, const char**)
                 } else {
                     mosDebug("   failed: %s\n", strerror(errno));
                 }
+            } else if (strncmp(arg, "---dumprsrc=", 12)==0) {
+                mosDebug("Dumping resource fork content to files '%s.cpp' and '%s.h'\n", arg+12, arg+12);
+                gRsrcFileBaseName = strdup(arg+12);
             } else if (strncmp(arg, "---", 3)==0) {
                 mosError("Unknown command line argument '%s'\n", arg);
                 exit(1);
@@ -503,6 +508,51 @@ int setupSystem(int argc, const char **argv, const char**)
 }
 
 
+void writeRsrcFiles(const char *basename)
+{
+    byte *app = (byte*)mosToHost(theApp);
+    uint32_t appSize = theAppSize;
+    uint32_t i;
+    char filename[PATH_MAX];
+
+    snprintf(filename, PATH_MAX, "%s.cpp", basename);
+    FILE *c_file = fopen(filename, "wb");
+    fputs(
+          "\n"
+          "#include \"rsrc.h\"\n"
+          "\n"
+          "unsigned char rsrc[] = {\n",
+          c_file);
+    for (i=0; i<appSize; i++) {
+        if ((i&15)==0) fprintf(c_file, "    ");
+        fprintf(c_file, "0x%02X, ", app[i]);
+        if ((i&15)==15) fprintf(c_file, "\n");
+    }
+    fputs(
+          "\n};\n"
+          "\n"
+          "unsigned char *gAppResource = rsrc;\n"
+          "unsigned int gAppResourceSize = sizeof(rsrc);\n"
+          "\n",
+          c_file);
+    fclose(c_file);
+
+    snprintf(filename, PATH_MAX, "%s.h", basename);
+    FILE *h_file = fopen(filename, "wb");
+    fputs(
+          "\n"
+          "#ifndef __mosrun__rsrc__\n"
+          "#define __mosrun__rsrc__\n"
+          "\n"
+          "extern unsigned char *gAppResource;\n"
+          "extern unsigned int gAppResourceSize;\n"
+          "\n"
+          "#endif /* defined(__mosrun__rsrc__) */\n"
+          "\n",
+          h_file);
+    fclose(h_file);
+}
+
 /**
  * This is a collection of breakpoints that I used to understand ARM6asm.
  *
@@ -545,7 +595,7 @@ void setBreakpoints()
  */
 int main(int argc, const char **argv, const char **envp)
 {
-    //mosLogVerbosity(MOS_VERBOSITY_LOG);
+    mosLogVerbosity(MOS_VERBOSITY_LOG);
     //mosLogVerbosity(MOS_VERBOSITY_TRACE);
     mosMemoryInit();
 #ifdef MOS_UNITTESTS
@@ -575,6 +625,10 @@ int main(int argc, const char **argv, const char **envp)
     if (!appLoaded) {
         mosError("Can't find application data\n");
         exit(9);
+    }
+
+    if (gRsrcFileBaseName) {
+        writeRsrcFiles(gRsrcFileBaseName);
     }
 
     runApp();

@@ -12,7 +12,8 @@ endif()
 
 source_group("Source Files\\musashi331" REGULAR_EXPRESSION "musashi331/*")
 
-add_executable(mosrun
+set(
+    MOSRUN_SRCS
     names.cpp names.h
     main.cpp main.h
     log.cpp log.h
@@ -21,7 +22,6 @@ add_executable(mosrun
     fileio.cpp fileio.h
     resourcefork.cpp resourcefork.h
     cpu.cpp cpu.h
-    rsrc.cpp rsrc.h
     traps.cpp traps.h
     filename.cpp filename.h
     systemram.cpp systemram.h
@@ -32,13 +32,21 @@ add_executable(mosrun
     ./musashi331/m68kcpu.c
     ./musashi331/m68kopdm.c
     debug_break.h
-    )
+)
+
+add_executable(mosrun           ${MOSRUN_SRCS} rsrc.cpp rsrc.h)
+add_executable(AIFtoNTK         ${MOSRUN_SRCS} tools/rsrc_aiftontk.cpp)
+add_executable(ARM6asm          ${MOSRUN_SRCS} tools/rsrc_arm6asm.cpp)
+add_executable(ARM6c            ${MOSRUN_SRCS} tools/rsrc_arm6c.cpp)
+add_executable(ARMCFront        ${MOSRUN_SRCS} tools/rsrc_armcfront.cpp)
+add_executable(ARMCpp           ${MOSRUN_SRCS} tools/rsrc_armcpp.cpp)
+add_executable(ARMLink          ${MOSRUN_SRCS} tools/rsrc_armlink.cpp)
+add_executable(DumpAIF          ${MOSRUN_SRCS} tools/rsrc_dumpaif.cpp)
+add_executable(DumpAOF          ${MOSRUN_SRCS} tools/rsrc_dumpaof.cpp)
+add_executable(ProtocolGenTool  ${MOSRUN_SRCS} tools/rsrc_protocolgentool.cpp)
+add_executable(Rex              ${MOSRUN_SRCS} tools/rsrc_rex.cpp)
+
 install(TARGETS mosrun RUNTIME DESTINATION bin)
-
-
-add_executable(mosmake
-    ./mosmake/mosmake.cpp
-    )
 
 add_custom_target(documentation SOURCES
     README.md

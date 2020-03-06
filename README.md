@@ -12,6 +12,7 @@ Table of Contents
 1. Usage
 1. Resource forks and tool binaries
 1. Todo List
+1. Tested and Untested Tools
 1. Alternatives to mosrun
 
 
@@ -127,6 +128,52 @@ Todo List
 1. write a script that generates command line executables of all NCT tools
 1. create directories with real world examples
 
+
+Tested and Untested Tools
+-------------------------
+
+| Tool              |    | Description / Status                                |
+|-------------------|----|-----------------------------------------------------|
+| AIFtoNTK          |  I | This tool converts an ARM Image Format (AIF) file into an NTK “streamed frame” file. |
+|                   |    | This tool launches and needs to be tested and documented. |
+| ARM6asm           |  i | ARM AOF Macro Assembler 2.21, May 10 1994 |
+|                   |    | This tool works and creats object files, but needs to be tested and documented. |
+| ARM6c             |  i | Norcroft Newton OS Newton C vsn 4.62b1, Feb 20 1995 |
+|                   |    | This tool launches and needs to be tested and documented. |
+| ARMCFront         |  e | ARM C Compiler Frontend |
+|                   |    | FIXME: this tool crashes! |
+| ARMCpp            |  i | Norcroft Newton OS Newton C++ vsn 0.43/C4.68, Jul 12 1996 |
+|                   |    | This tool launches and needs to be tested and documented. |
+| ARMLink           |  i | ARM Linker vsn 5.04, Advanced RISC Machines rel195, Apr 29 1996 |
+|                   |    | This tool launches and needs to be tested and documented. |
+| DumpAIF           |  i | This is a tool for advanced users who want to see the linker output code. |
+|                   |    | This tool launches and needs to be tested and documented. |
+| DumpAOF           |  i | AOF Decoder vsn 3.32, decodes an ARM Object Format (AOF) file |
+|                   |    | This tool launches and needs to be tested and documented. |
+| ProtocolGenTool   |  i | Generate stubs for interfaces and implementatiosn |
+|                   |    | At least we now know that Elvis is dead. |
+| Rex               |  i | Tool to bild a ROM Extension file form various parts using a configuration file |
+|                   |    | Launches and displays help text, not yet tested. |
+| CallFinder        |  - | No documentation found. |
+|                   |    | Uses graphics calls, s not emulated in the command line. |
+| CoolRequest       |  - | No documentation found. |
+|                   |    | Dialog boxes are not emulated in the command line. |
+| LinkMenu          |  - | No documentation found. |
+|                   |    | Menu items are not emulated in the command line. |
+| Makemake          |  - | Probably generates a Makefile for various type of projects. |
+|                   |    | This tool launches but has no description in the help page, so we don't know what it does. |
+| Packer            |  - | No documentation found. |
+|                   |    | This tool launches but has no description in the help page, so we don't know what it does. |
+| Pram              |  - | No documentation found. |
+|                   |    | This tool launches but has no description in the help page, so we don't know what it does. |
+| SetMenuItem       |  - | SetMenuItem can change the title and/or style of an installed MPW user menu item. |
+|                   |    | Menu items are not emulated in the command line. |
+
+* OK = tested and working
+* i = included, but not yet tested
+* w = minor buggy, needs to be looked at
+* e = crashing, needs to be fixed
+* - = will not be included or supported
 
 Alternatives to mosrun
 ----------------------
