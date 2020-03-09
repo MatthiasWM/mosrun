@@ -78,7 +78,7 @@ extern byte gFilterStdoutDataFrom;
 extern byte gFilterStdoutDataTo;
 extern byte gCheckMemory; // 0=don;t check, 1=check, 2=check and exit
 
-const unsigned int kMosMemMax        = 2*1024*1024;  // Size of emulated RAM
+const unsigned int kMosMemMax        = 16*1024*1024;  // Size of emulated RAM
 
 const unsigned int kMosApplLimit      = 0x0130;  // Application heap limit
 const unsigned int kMosApplZone       = 0x02aa;  // Address of application heap zone
