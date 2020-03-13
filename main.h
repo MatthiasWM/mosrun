@@ -76,7 +76,7 @@ void writeRsrcFiles(const char *basename);
 
 extern byte gFilterStdoutDataFrom;
 extern byte gFilterStdoutDataTo;
-extern byte gCheckMemory; // 0=don;t check, 1=check, 2=check and exit
+extern byte gCheckMemory; // 0=don't check, 1=check, 2=check and exit
 
 const unsigned int kMosMemMax        = 16*1024*1024;  // Size of emulated RAM
 
