@@ -96,7 +96,13 @@ void trapSyFAccess(uint16_t) {
     unsigned int file = m68k_read_memory_32(sp+12);
     unsigned short flags = m68k_read_memory_16(file);
     mosTrace("Accessing file '%s', cmd=0x%08X, arg=0x%08X, flags=0x%04X\n", filename, cmd, file, flags);
-    if (cmd!=0x00006400) { // '..d.'
+    if (cmd==0x00006401) { // Delete file
+        char *uxFilename = strdup(mosFilenameConvertTo(filename, MOS_TYPE_UNIX));
+        ::remove(uxFilename);
+        m68k_set_reg(M68K_REG_D0, 0); // no error
+        free(uxFilename);
+        return;
+    } else if (cmd!=0x00006400) { // '..d.'
         mosError("trapSyFAccess: Unknown file access command 0x%08X\n", cmd);
         m68k_set_reg(M68K_REG_D0, EINVAL); // no error
         return;
