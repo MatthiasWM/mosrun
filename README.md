@@ -134,16 +134,16 @@ Tested and Untested Tools
 
 | Tool              |    | Description / Status                                |
 |-------------------|----|-----------------------------------------------------|
-| AIFtoNTK          |  i | This tool converts an ARM Image Format (AIF) file into an NTK “streamed frame” file. |
-|                   |    | This tool launches and needs to be tested and documented. |
+| AIFtoNTK          | OK | This tool converts an ARM Image Format (AIF) file into an NTK “streamed frame” file. |
+|                   |    | Tool creates correct .ntkc files. **Note:** the configuration file must use Mac style newline characters! **Note:** to use the .ntkc file with MacOS NTK, set its type to 'ntkc' with *ResEdit* |
 | ARM6asm           | OK | ARM AOF Macro Assembler 2.21, May 10 1994 |
-|                   |    | This tool works and creats object files, but needs to be tested and documented. |
+|                   |    | Tool has been used successfully to create object files from assembler. |
 | ARM6c             |  i | Norcroft Newton OS Newton C vsn 4.62b1, Feb 20 1995 |
 |                   |    | This tool launches and needs to be tested and documented. |
 | ARMCpp            |  i | Norcroft Newton OS Newton C++ vsn 0.43/C4.68, Jul 12 1996 |
 |                   |    | This tool launches and needs to be tested and documented. |
-| ARMLink           |  i | ARM Linker vsn 5.04, Advanced RISC Machines rel195, Apr 29 1996 |
-|                   |    | This tool launches and needs to be tested and documented. |
+| ARMLink           | OK | ARM Linker vsn 5.04, Advanced RISC Machines rel195, Apr 29 1996 |
+|                   |    | Tool has been used to create AIF files. |
 | DumpAIF           |  i | This is a tool for advanced users who want to see the linker output code. |
 |                   |    | This tool launches and needs to be tested and documented. |
 | DumpAOF           |  i | AOF Decoder vsn 3.32, decodes an ARM Object Format (AOF) file |
@@ -151,7 +151,7 @@ Tested and Untested Tools
 | ProtocolGenTool   |  i | Generate stubs for interfaces and implementatiosn |
 |                   |    | At least we now know that Elvis is dead. |
 | Rex               |  i | Tool to bild a ROM Extension file form various parts using a configuration file |
-|                   |    | Launches and displays help text, not yet tested. |
+|                   |    | Tool creates .rex files, but those have not been tested yet. **Note:** the configuration file must use Mac style newline characters! |
 | ARMCFront         |  x | Outdated ARM C++-to-C compiler |
 |                   |    | No need to support this. |
 | CallFinder        |  x | No documentation found. |
