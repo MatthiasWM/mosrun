@@ -895,7 +895,7 @@ const char *trapName(unsigned int id)
             if (t->id == 0)
                 break;
             if (t->id == (id^0x0400)) {
-                sprintf(buf, "%s (POP)", t->name);
+                snprintf(buf, 64, "%s (POP)", t->name);
                 return buf;
             }
             t++;
@@ -906,7 +906,7 @@ const char *trapName(unsigned int id)
             if (t->id == 0)
                 break;
             if ((t->id&0xf8ff) == (id&0xf8ff)) {
-                sprintf(buf, "%s (+flags)", t->name);
+                snprintf(buf, 64, "%s (+flags)", t->name);
                 return buf;
             }
             t++;
