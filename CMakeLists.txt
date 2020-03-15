@@ -46,6 +46,7 @@ add_executable(ProtocolGenTool  ${MOSRUN_SRCS} tools/rsrc_protocolgentool.cpp)
 add_executable(Rex              ${MOSRUN_SRCS} tools/rsrc_rex.cpp)
 
 add_executable(DumpRex          tools/dumprex.cpp)
+add_executable(BuildRex         tools/buildrex.cpp)
 
 install(TARGETS mosrun RUNTIME DESTINATION bin)
 
