@@ -14,6 +14,7 @@ Table of Contents
 1. Todo List
 1. Tested and Untested Tools
 1. Alternatives to mosrun
+1. _DumpRex_ and _BuildRex_
 
 
 Note
@@ -199,3 +200,26 @@ Alternatives to mosrun
 
 mosrun is licensed under GPL V3. No warranties, no claims, enjoy.
 
+
+_DumpRex_ and _BuildRex_
+------------------------
+
+_DumpRex_ takes a NewtonOS ROM Extension file name (a file ending in _.rex_,
+probably Einstein.rex) and creates a configuration file (Einstein.rex.cfg)
+and another file for each block or package inside the REX. Newton Script
+packages extracted from a REX should be fixed to run as a regualr package
+and can also be disassembled with the appropriate tools.
+
+_BuildRex_ takes two arguments. The first argument is the filename of the
+configuration file, as created by _DumpRex_. You can add NewtonScript based
+packages to the configuration file, and remove existing packages as well. The
+second argument is the name of the new REX file that _BuildRex_ will generate.
+
+Note that both tools are very experimental single-purpose projects that will
+fail on more complex tasks.
+
+Also note that modifying _Einstein.rex_ will not install or uninstall packages
+automatically. For now, the only way I know is to delete the _flash_ file. It
+may be possible to makea a backup first and restor it later.
+
+ - Matthias

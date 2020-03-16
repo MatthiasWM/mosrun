@@ -1,3 +1,24 @@
+/*
+ buildrex - Assemble multiple packages into a NewtonOS Rex file.
+ Copyright (C) 2013-2020  Matthias Melcher
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+ The author can be contacted at mosrun AT matthiasm DOT com.
+ The latest source code can be found at https://github.com/MatthiasWM/mosrun
+ */
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +35,9 @@ uint32_t nBlocks = 0;
 class RexBlock *rexBlock[100];
 uint32_t nPackages = 0;
 class RexPackage *rexPackage[100];
+
+extern int relocatePkg(uint8_t *pkg, uint32_t oldAddress, uint32_t newAddress);
+
 
 class RexPackage
 {
@@ -41,12 +65,21 @@ public:
             }
         }
     }
-    void write(FILE *d) {
+    int write(FILE *d, uint32_t offset=0xFFFFFFFF) {
+        int ret = 0;
+        printf("BuildRex: adding \"%s\"...\n", pFilename);
         FILE *s = ::fopen(pFilename, "rb");
+        if (!s) {
+            printf("BuildRex: can't open package \"%s\" for reading\n", pFilename);
+            return -1;
+        }
         void *data = malloc(pSize);
         ::fread(data, pSize, 1, s);
+        if (offset!=0xFFFFFFFF)
+            ret = relocatePkg((uint8_t*)data, 0, offset);
         ::fwrite(data, pSize, 1, d);
         ::fclose(s);
+        return ret;
     }
     char *pFilename = nullptr;
     uint32_t pSize = 0;
@@ -81,15 +114,19 @@ void writeUInt32(FILE *r, uint32_t d)
 void writeHeader(FILE *r)
 {
     uint32_t nEntries = nBlocks + (nPackages>0);
-
     uint32_t offset = 40 + 12*nEntries;
+
     uint32_t blocksSize = 0;
-    for (uint32_t i=0; i<nBlocks; i++) blocksSize += rexBlock[i]->pSize;
+    for (uint32_t i=0; i<nBlocks; i++) {
+        blocksSize += rexBlock[i]->pSize;
+    }
+
     uint32_t pkgsSize = 0;
     for (uint32_t i=0; i<nPackages; i++) {
         printf("Pkg %d: %d bytes\n", i, rexPackage[i]->pSize);
         pkgsSize += rexPackage[i]->pSize;
     }
+
     uint32_t totalSize = offset + blocksSize + pkgsSize;
 
     ::fwrite("RExBlock", 8, 1, r);
@@ -97,7 +134,7 @@ void writeHeader(FILE *r)
     writeUInt32(r, 1); // header version
     ::fwrite(cfgManufacturer, 4, 1, r);
     writeUInt32(r, cfgVersion); // version
-    writeUInt32(r, totalSize); // length, fill in later
+    writeUInt32(r, totalSize); // length of file
     writeUInt32(r, cfgId); // extension ID (0..kMaxROMExtensions-1)
     writeUInt32(r, cfgStart); // virtual address of the top of this block
     writeUInt32(r, nEntries); // number of config entries
@@ -121,7 +158,8 @@ void writeHeader(FILE *r)
     }
 
     for (uint32_t i=0; i<nPackages; i++) {
-        rexPackage[i]->write(r);
+        uint32_t pkgAddress = cfgStart + (uint32_t)::ftell(r);
+        rexPackage[i]->write(r, pkgAddress);
     }
 }
 

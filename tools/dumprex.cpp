@@ -1,3 +1,24 @@
+/*
+ dumprex - Extract packages from a NewtonOS Rex file.
+ Copyright (C) 2013-2020  Matthias Melcher
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+ The author can be contacted at mosrun AT matthiasm DOT com.
+ The latest source code can be found at https://github.com/MatthiasWM/mosrun
+ */
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +29,9 @@
 
 void *gRex = nullptr;
 size_t gRexSize = 0;
+
+extern int relocatePkg(uint8_t *pkg, uint32_t oldAddress, uint32_t newAddress);
+
 
 uint32_t rexGetU32(size_t offset)
 {
@@ -95,6 +119,9 @@ int writePgkList(FILE *f, const char *basedir, uint32_t offset, uint32_t length)
         }
         uint32_t size = rexGetU32(offset+28);
         totalSize += size;
+
+        ret = relocatePkg( (uint8_t*)(gRex)+offset, rexGetU32(32)+offset, 0);
+        if (ret==-1) break;
 
         ret = writeHexForC(basedir, "package", nPkg, ".pkg", offset, size);
         if (ret==-1) break;

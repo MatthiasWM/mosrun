@@ -1,6 +1,6 @@
 /*
  mosrun - the MacOS MPW runtime emulator
- Copyright (C) 2013  Matthias Melcher
+ Copyright (C) 2013-2020  Matthias Melcher
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
  The author can be contacted at mosrun AT matthiasm DOT com.
- The latest source code can be found at http://code.google.com/p/dynee5/
+ The latest source code can be found at https://github.com/MatthiasWM/mosrun
  */
 
 //

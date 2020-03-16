@@ -45,8 +45,11 @@ add_executable(DumpAOF          ${MOSRUN_SRCS} tools/rsrc_dumpaof.cpp)
 add_executable(ProtocolGenTool  ${MOSRUN_SRCS} tools/rsrc_protocolgentool.cpp)
 add_executable(Rex              ${MOSRUN_SRCS} tools/rsrc_rex.cpp)
 
-add_executable(DumpRex          tools/dumprex.cpp)
-add_executable(BuildRex         tools/buildrex.cpp)
+if(MSVC)
+else()
+    add_executable(DumpRex          tools/dumprex.cpp tools/relocatepkg.cpp)
+    add_executable(BuildRex         tools/buildrex.cpp tools/relocatepkg.cpp)
+endif()
 
 install(TARGETS mosrun RUNTIME DESTINATION bin)
 

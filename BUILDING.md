@@ -20,7 +20,10 @@ Table of Contents
 Build Variants
 --------------
 
-(TODO: How to compile with integrated resources.)
+Notes on building _DumpRex_ and _BuildRex_: these target have been excluded
+from the MSWindows build because they have not been ported yet. It's not a
+big deal, but I just don;t have the time right now. They are also untested
+on Linux.
 
 
 CMake
