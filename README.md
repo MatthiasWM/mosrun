@@ -183,7 +183,8 @@ Alternatives to mosrun
   * this requires to set up an entire MacOS system with MPW and tools. It is not
     (easily) possible to launch tools inside MPW from the host computer though.
 * Executor:
-  * Does what mosrun does for graphical MacOS applications. It seems to be lacking
+  * https://web.archive.org/web/20090404042926/http://www.ardi.com/executor.php ,
+    does what mosrun does for graphical MacOS applications. It seems to be lacking
     the MPW interface, plus I could not get it to compile.
 * Classix:
   * Very similar to mosrun, but focusses on PPC. Some of the Newton tools are not
@@ -196,6 +197,10 @@ Alternatives to mosrun
     inactive.
 * and of course Carbon/Rosetta on OS X with PowerPC
   * http://www.apple.com
+* a more recent approac is M.A.C.E.
+  * https://mace.software , MACE is quite similar to Executor. Unfortunatley at the time of
+    writing, MACE is not OpenSource and needs to be compiled by the author to include
+    one specific application. This would be a great solution for NTK, the Newton Toolkit.
 
 
 mosrun is licensed under GPL V3. No warranties, no claims, enjoy.
