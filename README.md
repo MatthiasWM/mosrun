@@ -163,7 +163,7 @@ Tested and Untested Tools
 |                   |    | Menu items are not emulated in the command line. |
 | Makemake          |  x | Probably generates a Makefile for various type of projects. |
 |                   |    | This tool launches but has no description in the help page, so we don't know what it does. |
-| Packer            |  x | No documentation found. |
+| Packer            |  i | No documentation found. |
 |                   |    | This tool launches but has no description in the help page, so we don't know what it does. |
 | Pram              |  x | No documentation found. |
 |                   |    | This tool launches but has no description in the help page, so we don't know what it does. |
