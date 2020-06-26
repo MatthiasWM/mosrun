@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <string.h>
 #include <libgen.h>
+#include <stdint.h>
 
 
 void *gRex = nullptr;
@@ -142,7 +143,13 @@ int dumprex(const char *filename)
     char basedir[2048];
 
     snprintf(configname, sizeof(configname), "%s.cfg", filename);
+#ifdef __linux__
+    char tmpFilename[2048];
+    strcpy(tmpFilename, filename);
+    strcpy(basedir, ::dirname(tmpFilename));
+#else
     ::dirname_r(filename, basedir);
+#endif
 
     if (strncmp((char*)gRex, "RExBlock", 8)!=0) {
         printf("DumpRex: file \"%s\" is not a REx file\n", filename);
