@@ -25,6 +25,10 @@
 #include <errno.h>
 #include <string.h>
 #include <libgen.h>
+#include <stdint.h>
+#ifdef __linux__
+#include <arpa/inet.h>
+#endif
 
 
 uint32_t cfgId = 1;
