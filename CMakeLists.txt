@@ -52,7 +52,18 @@ else()
     add_executable(BuildRex         tools/buildrex.cpp tools/relocatepkg.cpp)
 endif()
 
-install(TARGETS mosrun RUNTIME DESTINATION bin)
+install(TARGETS mosrun
+    AIFtoNTK
+    ARM6asm
+    ARM6c
+    ARMCpp
+    ARMLink
+    DumpAIF
+    DumpAOF
+    ProtocolGenTool
+    Rex
+    Packer
+    RUNTIME DESTINATION bin)
 
 add_custom_target(documentation SOURCES
     README.md
