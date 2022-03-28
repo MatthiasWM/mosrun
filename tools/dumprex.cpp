@@ -1,6 +1,7 @@
 /*
  dumprex - Extract packages from a NewtonOS Rex file.
  Copyright (C) 2013-2020  Matthias Melcher
+ Copyright (C) 2022 Victor Rehorst
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -23,8 +24,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <arpa/inet.h>
 #include <string.h>
 #include <libgen.h>
+#include <stdint.h>
 
 
 void *gRex = nullptr;
@@ -139,10 +142,10 @@ int writePgkList(FILE *f, const char *basedir, uint32_t offset, uint32_t length)
 int dumprex(const char *filename)
 {
     char configname[2048];
-    char basedir[2048];
+    char *basedir;
 
+    basedir = dirname(configname);
     snprintf(configname, sizeof(configname), "%s.cfg", filename);
-    ::dirname_r(filename, basedir);
 
     if (strncmp((char*)gRex, "RExBlock", 8)!=0) {
         printf("DumpRex: file \"%s\" is not a REx file\n", filename);
@@ -161,32 +164,46 @@ int dumprex(const char *filename)
     fprintf(f, "version           %d\n", rexGetU32(20));
     fprintf(f, "start             0x%08X\n", rexGetU32(32));
     fprintf(f, "manufacturer      '%.4s'\n", (char*)gRex+16);
-    uint32_t nEntry = rexGetU32(36);
 
+    uint32_t nEntry = rexGetU32(36);
+    //printf("I see %d entries in this REx header\n", nEntry);
+
+    // These count the number of each type of part seen in the REx.  These are
+    // (so far) the only parts that have been seen multiple times in RExes.
     uint32_t fdrv = 0;
     uint32_t FDRV = 0;
+    uint32_t pad = 0;
+    char *tagAsString;
+
     for (uint32_t i=0; i<nEntry; i++) {
         uint32_t tag = rexGetU32(i*12 + 40);
         uint32_t offset = rexGetU32(i*12 + 44);
         uint32_t length = rexGetU32(i*12 + 48);
         int ret = 0;
+        tagAsString = (char*)gRex+i*12+40;
+
         switch (tag) {
+            case 'pad ':
+                ret = writeHexForC(basedir, "pad ", pad, ".bin", offset, length);
+                fprintf(f, "block             '%.4s' \"%s/%s%d.bin\"\n", tagAsString, basedir, tagAsString, pad);
+                pad++;
+                break;
             case 'fdrv':
                 ret = writeHexForC(basedir, "fdrv", fdrv, ".bin", offset, length);
-                fprintf(f, "block             '%.4s' \"%s/%s%d.bin\"\n", (char*)gRex+i*12+40, basedir, "fdrv", fdrv);
+                fprintf(f, "block             '%.4s' \"%s/%s%d.bin\"\n", tagAsString, basedir, tagAsString, fdrv);
                 fdrv++;
                 break;
             case 'FDRV':
                 ret = writeHexForC(basedir, "fdrvx", FDRV, ".bin", offset, length);
-                fprintf(f, "block             '%.4s' \"%s/%s%d.bin\"\n", (char*)gRex+i*12+40, basedir, "fdrvx", FDRV);
+                fprintf(f, "block             '%.4s' \"%s/%s%d.bin\"\n", tagAsString, basedir, "fdrvx", FDRV);
                 FDRV++;
                 break;
             case 'pkgl':
                 ret = writePgkList(f, basedir, offset, length);
                 break;
             default:
-                printf("DumpRex: unknown entry '%.4s' in rex file \"%s\"\n", (char*)gRex+i*12+40, configname);
-                ret = -1;
+                ret = writeHexForC(basedir, tagAsString, 0, ".bin", offset, length);
+                fprintf(f, "block             '%.4s' \"%s/%s%d.bin\"\n", tagAsString, basedir, tagAsString, 0);
                 break;
         }
         if (ret==-1)
@@ -217,9 +234,9 @@ int readrex(const char *filename)
 /**
  Extract the content of a NewtonOS Rex file.
 
- This dissects the Rex file and creates a file that listst the content, and 'C' compilabale
- dumps of every module that is found/ The support is limited to the files that we will
- find inside Einstein.rex. No relocations are done.
+ This dissects the Rex file and creates a file that lists the content, and 'C' compilable
+ dumps of every module that is found. Supports multiple parts, where is is known
+ that there are RExes in the wild with more than one of those parts.
  */
 int main(int argc, char **argv)
 {
@@ -233,11 +250,3 @@ int main(int argc, char **argv)
     }
     return 0;
 }
-
-
-
-
-
-
-
-

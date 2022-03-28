@@ -19,12 +19,22 @@
  The latest source code can be found at https://github.com/MatthiasWM/mosrun
  */
 
+/**
+TODO:
+- output REx blocks in same order they are read from config file; don't always
+  put packages at the end
+*/
+
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <errno.h>
 #include <string.h>
 #include <libgen.h>
+#ifdef __linux__
+#include <arpa/inet.h>
+#endif
 
 
 uint32_t cfgId = 1;
