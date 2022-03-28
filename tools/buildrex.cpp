@@ -28,11 +28,13 @@ TODO:
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <cstdint>
-#include <arpa/inet.h>
+#include <stdint.h>
 #include <errno.h>
 #include <string.h>
 #include <libgen.h>
+#ifdef __linux__
+#include <arpa/inet.h>
+#endif
 
 
 uint32_t cfgId = 1;
