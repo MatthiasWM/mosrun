@@ -36,6 +36,10 @@ TODO:
 #include <arpa/inet.h>
 #endif
 
+#ifndef __linux__
+#include "fmemopen.h"
+#endif
+
 
 uint32_t cfgId = 1;
 uint32_t cfgVersion = 1;
@@ -121,7 +125,70 @@ void writeUInt32(FILE *r, uint32_t d)
     ::fwrite(&v, 4, 1, r);
 }
 
-void writeHeader(FILE *r)
+// https://stackoverflow.com/questions/10564491/function-to-calculate-a-crc16-checksum
+#define CRC16 0x8005
+
+uint16_t ComputeCRC16(const uint8_t* data, size_t size) {
+    uint16_t out = 0;
+    int bits_read = 0, bit_flag;
+
+    /* Sanity check: */
+    if (data == NULL)
+        return 0;
+
+    while (size > 0) {
+        bit_flag = out >> 15;
+
+        /* Get next bit: */
+        out <<= 1;
+        out |= (data[0] >> bits_read) & 1; // item a) work from the least significant bits
+
+        /* Increment bit counter: */
+        bits_read++;
+        if (bits_read > 7) {
+            bits_read = 0;
+            data++;
+            size--;
+        }
+
+        /* Cycle check: */
+        if(bit_flag)
+            out ^= CRC16;
+    }
+
+    // item b) "push out" the last 16 bits
+    int i;
+    for (i = 0; i < 16; ++i) {
+        bit_flag = out >> 15;
+        out <<= 1;
+        if(bit_flag)
+            out ^= CRC16;
+    }
+
+    // item c) reverse the bits
+    uint16_t crc = 0;
+    i = 0x8000;
+    int j = 0x0001;
+    for (; i != 0; i >>=1, j <<= 1) {
+        if (i & out) crc |= j;
+    }
+
+    return crc;
+}
+
+uint32_t writeBlocksHeader(FILE *r, uint32_t offset)
+{
+  for (uint32_t i=0; i<nBlocks; i++) {
+      RexBlock *b = rexBlock[i];
+      ::fwrite(&b->pTag, 4, 1, r);
+      writeUInt32(r, offset);
+      writeUInt32(r, b->pSize);
+      offset += b->pSize;
+  }
+  return offset;
+}
+
+void writeREx(FILE *r)
 {
     uint32_t nEntries = nBlocks + (nPackages>0);
     uint32_t offset = 40 + 12*nEntries;
@@ -139,38 +206,53 @@ void writeHeader(FILE *r)
 
     uint32_t totalSize = offset + blocksSize + pkgsSize;
 
-    ::fwrite("RExBlock", 8, 1, r);
-    writeUInt32(r, 0xFFFFFFFF); // checksum is undefined
-    writeUInt32(r, 1); // header version
-    ::fwrite(cfgManufacturer, 4, 1, r);
-    writeUInt32(r, cfgVersion); // version
-    writeUInt32(r, totalSize); // length of file
-    writeUInt32(r, cfgId); // extension ID (0..kMaxROMExtensions-1)
-    writeUInt32(r, cfgStart); // virtual address of the top of this block
-    writeUInt32(r, nEntries); // number of config entries
+    // 1) write everything except 'RExBlock' and checksum value to memory buffer
+    // 2) calculate checksum on mem buffer
 
-    for (uint32_t i=0; i<nBlocks; i++) {
-        RexBlock *b = rexBlock[i];
-        ::fwrite(&b->pTag, 4, 1, r);
-        writeUInt32(r, offset);
-        writeUInt32(r, b->pSize);
-        offset += b->pSize;
-    }
+    void *data = ::calloc(totalSize, 1);
+    FILE *mr = fmemopen(data, totalSize, "w+");
+    ::rewind(mr);
 
+    writeUInt32(mr, 1);
+    ::fwrite(cfgManufacturer, 4, 1, mr);
+    writeUInt32(mr, cfgVersion); // version
+    writeUInt32(mr, totalSize); // length of file
+    writeUInt32(mr, cfgId); // extension ID (0..kMaxROMExtensions-1)
+    writeUInt32(mr, cfgStart); // virtual address of the top of this block
+    writeUInt32(mr, nEntries); // number of config entries
+
+    offset = writeBlocksHeader(mr, nBlocks);
     if (nPackages>0) {
-        ::fwrite("pkgl", 4, 1, r);
-        writeUInt32(r, offset);
-        writeUInt32(r, pkgsSize);
+        ::fwrite("pkgl", 4, 1, mr);
+        writeUInt32(mr, offset);
+        writeUInt32(mr, pkgsSize);
     }
 
     for (uint32_t i=0; i<nBlocks; i++) {
-        rexBlock[i]->write(r);
+        rexBlock[i]->write(mr);
     }
 
     for (uint32_t i=0; i<nPackages; i++) {
-        uint32_t pkgAddress = cfgStart + (uint32_t)::ftell(r);
-        rexPackage[i]->write(r, pkgAddress);
+        uint32_t pkgAddress = cfgStart + (uint32_t)::ftell(mr);
+        rexPackage[i]->write(mr, pkgAddress);
     }
+
+    ::fflush(mr);
+    ::rewind(mr);
+
+    // calculate CRC16
+    uint16_t rexChecksum = ComputeCRC16((uint8_t*)data, (size_t)totalSize - 12);
+
+    printf("REX Checksum value is %X\n", rexChecksum);
+
+    // write 'RExBlock', checksum, and rest of data to disk
+    ::fwrite("RExBlock", 8, 1, r);
+    writeUInt32(r, (uint32_t)rexChecksum);
+
+    ::fwrite(data, totalSize-12, 1, r);
+
+    ::fclose(mr);
+    ::free(data);
 }
 
 int buildrex(const char *cfgFile, const char *rexFile)
@@ -198,12 +280,12 @@ int buildrex(const char *cfgFile, const char *rexFile)
         if (line[0]==0 || strncmp(line, "// ", 3)==0) {
             // skip
         } else if (strncmp(line, "id ", 3)==0) {
-            if (sscanf(line+3, "%d", &cfgId)!=1) {
+            if (sscanf(line+3, "%u", &cfgId)!=1) {
                 printf("BuildRex: can't read config ID from \"%s\"\n", line);
                 return -1;
             }
         } else if (strncmp(line, "version ", 8)==0) {
-            if (sscanf(line+8, "%d", &cfgVersion)!=1) {
+            if (sscanf(line+8, "%u", &cfgVersion)!=1) {
                 printf("BuildRex: can't read config version from \"%s\"\n", line);
                 return -1;
             }
@@ -220,6 +302,7 @@ int buildrex(const char *cfgFile, const char *rexFile)
             }
             cfgManufacturer = strdup(b+1);
             if (strlen(cfgManufacturer)>4) cfgManufacturer[4] = 0;
+            if (cfgManufacturer[1] == '\'') cfgManufacturer[1] = 0;
         } else if (strncmp(line, "block ", 6)==0) { // flowed by 'xxxx' "filename"
             rexBlock[nBlocks] = new RexBlock(line);
             if (rexBlock[nBlocks]->pFilename==nullptr) return -1;
@@ -233,9 +316,7 @@ int buildrex(const char *cfgFile, const char *rexFile)
         }
     }
 
-    writeHeader(r);
-    // write config entries
-    // write blocks
+    writeREx(r);
 
     ::fclose(f);
     ::fclose(r);
