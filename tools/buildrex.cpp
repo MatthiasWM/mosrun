@@ -21,8 +21,7 @@
 
 /**
 TODO:
-- output REx blocks in same order they are read from config file; don't always
-  put packages at the end
+- figure out whether relocatepkg is doing proper un-location and re-location
 */
 
 
@@ -47,6 +46,7 @@ uint32_t cfgStart = 0x00800000;
 char *cfgManufacturer = strdup("Eins");
 uint32_t nBlocks = 0;
 class RexBlock *rexBlock[100];
+uint32_t pkglBlockIdx = 101;
 uint32_t nPackages = 0;
 class RexPackage *rexPackage[100];
 
@@ -56,6 +56,7 @@ extern int relocatePkg(uint8_t *pkg, uint32_t oldAddress, uint32_t newAddress);
 class RexPackage
 {
 public:
+    RexPackage() {};
     RexPackage(const char *line) {
         const char *fn = strchr(line, '"');
         if (!fn) {
@@ -103,6 +104,9 @@ public:
 class RexBlock : public RexPackage
 {
 public:
+    RexBlock(uint32_t _pTag) {
+      pTag = _pTag;
+    }
     RexBlock(const char *line)
     : RexPackage(line)
     {
@@ -176,22 +180,29 @@ uint16_t ComputeCRC16(const uint8_t* data, size_t size) {
     return crc;
 }
 
-uint32_t writeBlocksHeader(FILE *r, uint32_t offset)
+uint32_t writeBlocksHeader(FILE *r, uint32_t offset, uint32_t pkgsSize)
 {
-  for (uint32_t i=0; i<nBlocks; i++) {
-      RexBlock *b = rexBlock[i];
-      ::fwrite(&b->pTag, 4, 1, r);
-      writeUInt32(r, offset);
-      writeUInt32(r, b->pSize);
-      offset += b->pSize;
-  }
-  return offset;
+    for (uint32_t i=0; i<nBlocks; i++) {
+        RexBlock *b = rexBlock[i];
+
+        if (i == pkglBlockIdx) {
+            ::fwrite("pkgl", 4, 1, r);
+            writeUInt32(r, offset);
+            writeUInt32(r, pkgsSize);
+            offset += pkgsSize;
+        } else {
+            ::fwrite(&b->pTag, 4, 1, r);
+            writeUInt32(r, offset);
+            writeUInt32(r, b->pSize);
+            offset += b->pSize;
+        }
+    }
+    return offset;
 }
 
 void writeREx(FILE *r)
 {
-    uint32_t nEntries = nBlocks + (nPackages>0);
-    uint32_t offset = 40 + 12*nEntries;
+    uint32_t offset = 40 + 12*nBlocks;
 
     uint32_t blocksSize = 0;
     for (uint32_t i=0; i<nBlocks; i++) {
@@ -219,22 +230,19 @@ void writeREx(FILE *r)
     writeUInt32(mr, totalSize); // length of file
     writeUInt32(mr, cfgId); // extension ID (0..kMaxROMExtensions-1)
     writeUInt32(mr, cfgStart); // virtual address of the top of this block
-    writeUInt32(mr, nEntries); // number of config entries
+    writeUInt32(mr, nBlocks); // number of config entries
 
-    offset = writeBlocksHeader(mr, nBlocks);
-    if (nPackages>0) {
-        ::fwrite("pkgl", 4, 1, mr);
-        writeUInt32(mr, offset);
-        writeUInt32(mr, pkgsSize);
-    }
+    offset = writeBlocksHeader(mr, offset, pkgsSize);
 
     for (uint32_t i=0; i<nBlocks; i++) {
-        rexBlock[i]->write(mr);
-    }
-
-    for (uint32_t i=0; i<nPackages; i++) {
-        uint32_t pkgAddress = cfgStart + (uint32_t)::ftell(mr);
-        rexPackage[i]->write(mr, pkgAddress);
+        if (i == pkglBlockIdx) {
+            for (uint32_t j=0; j<nPackages; j++) {
+                uint32_t pkgAddress = cfgStart + (uint32_t)::ftell(mr);
+                rexPackage[j]->write(mr, pkgAddress);
+            }
+        } else {
+            rexBlock[i]->write(mr);
+        }
     }
 
     ::fflush(mr);
@@ -308,6 +316,14 @@ int buildrex(const char *cfgFile, const char *rexFile)
             if (rexBlock[nBlocks]->pFilename==nullptr) return -1;
             nBlocks++;
         } else if (strncmp(line, "package ", 8)==0) { // flowed by "filename"
+
+            // add an entry to the block index array to preserve ordering
+            if (pkglBlockIdx > 100) {
+              rexBlock[nBlocks] = new RexBlock((uint32_t)'pkgl');
+              pkglBlockIdx = nBlocks;
+              nBlocks++;
+            }
+
             rexPackage[nPackages] = new RexPackage(line);
             if (rexPackage[nPackages]->pFilename==nullptr) return -1;
             nPackages++;
