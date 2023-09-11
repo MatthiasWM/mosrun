@@ -206,6 +206,8 @@ void trapSyWrite(uint16_t) {
             buffer = (void*)mosDataMacToUnix((char*)buffer, size);
     } else if (mosFile->fd==2) { // stderr
         buffer = (void*)mosDataMacToUnix((char*)buffer, size);
+    } else if (allout_data_mac_to_utf8) {
+      buffer = (void*)mosDataMacToUnix((char*)buffer, size);
     }
 
     int ret = write(mosFile->fd, buffer, size);

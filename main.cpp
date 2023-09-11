@@ -140,6 +140,7 @@ const char *gMosHelpText =
 "  ---log=filename : log all messages to a file\n"
 "  ---checkmem : enable memory access checking\n"
 "  ---checkmemstrict : check memory and exit on fault\n"
+"  ---allout-data-mac-to-utf8 : convert all file output from Mac encoding to Unicode"
 ;
 
 // application global variables
@@ -153,6 +154,8 @@ byte gCheckMemory = 0;
 
 byte gFilterStdoutDataFrom = MOS_TYPE_MAC;
 byte gFilterStdoutDataTo   = MOS_TYPE_UNIX;
+
+bool allout_data_mac_to_utf8 = false;
 
 char *gRsrcFileBaseName = nullptr;
 
@@ -463,8 +466,10 @@ int setupSystem(int argc, const char **argv, const char**)
                     mosDebug("   failed: %s\n", strerror(errno));
                 }
             } else if (strncmp(arg, "---dumprsrc=", 12)==0) {
-                mosDebug("Dumping resource fork content to files '%s.cpp' and '%s.h'\n", arg+12, arg+12);
-                gRsrcFileBaseName = strdup(arg+12);
+              mosDebug("Dumping resource fork content to files '%s.cpp' and '%s.h'\n", arg+12, arg+12);
+              gRsrcFileBaseName = strdup(arg+12);
+            } else if (strcmp(arg, "---allout-data-mac-to-utf8")==0) {
+              allout_data_mac_to_utf8 = true;
             } else if (strncmp(arg, "---", 3)==0) {
                 mosError("Unknown command line argument '%s'\n", arg);
                 exit(1);
