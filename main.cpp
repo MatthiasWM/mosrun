@@ -134,13 +134,14 @@ const char *gMosHelpText =
 "  mosrun ---run path/to/tool tool options ...\n"
 "  or embed an MPW tool at compile time.\n\n"
 "Options:\n"
-"  ---help : print thsi help page\n"
+"  ---help : print this help page\n"
 "  ---verbosity=xxx : set verbosity level to trace, debug, log, warn or err\n"
 "  ---stdout-raw : do not filter stdout (default converts form Mac to Unix)\n"
 "  ---log=filename : log all messages to a file\n"
 "  ---checkmem : enable memory access checking\n"
 "  ---checkmemstrict : check memory and exit on fault\n"
-"  ---allout-data-mac-to-utf8 : convert all file output from Mac encoding to Unicode"
+"  ---allout-data-mac-to-utf8 : convert all file output from Mac encoding to Unicode\n"
+"  ---allin-data-utf8-to-mac : EXPERIMENTAL! convert all file input from Unicode to Mac encoding\n"
 ;
 
 // application global variables
@@ -156,6 +157,7 @@ byte gFilterStdoutDataFrom = MOS_TYPE_MAC;
 byte gFilterStdoutDataTo   = MOS_TYPE_UNIX;
 
 bool allout_data_mac_to_utf8 = false;
+bool allin_data_utf8_to_mac = false;
 
 char *gRsrcFileBaseName = nullptr;
 
@@ -470,6 +472,8 @@ int setupSystem(int argc, const char **argv, const char**)
               gRsrcFileBaseName = strdup(arg+12);
             } else if (strcmp(arg, "---allout-data-mac-to-utf8")==0) {
               allout_data_mac_to_utf8 = true;
+            } else if (strcmp(arg, "---allin-data-utf8-to-mac")==0) {
+              allin_data_utf8_to_mac = true;
             } else if (strncmp(arg, "---", 3)==0) {
                 mosError("Unknown command line argument '%s'\n", arg);
                 exit(1);

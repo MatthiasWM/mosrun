@@ -179,7 +179,37 @@ void trapSyRead(uint16_t) {
     MosFile *mosFile = mosFileRegistry.at(ix);
     void *buffer = mosToHost(m68k_read_memory_32(file+16));
     unsigned int size = m68k_read_memory_32(file+12);
-    int ret = read(mosFile->fd, buffer, size);
+    int ret = 0;
+    if (allin_data_utf8_to_mac) {
+      // TODO: this is fishi because the file length is not calculated correctly
+      char ubuf[8];
+      unsigned int usize = 0;
+      unsigned int uindex = 0;
+      for (unsigned int i=0; i<size; i++) {
+        ret = (int)::read(mosFile->fd, ubuf, 1);
+        if (ret<1) break;
+        usize = 1;
+        int c = ubuf[0];
+        if ( (c&0xe0)==0xc0) {
+          ret = (int)::read(mosFile->fd, ubuf+1, 1);
+          if (ret<1) break;
+          usize = 2;
+        } else if ( (c&0xf0)==0xe0) {
+          ret = (int)::read(mosFile->fd, ubuf+1, 2);
+          if (ret<1) break;
+          usize = 3;
+        }
+        if (usize > 0) {
+          char *d = mosDataUnixToMac(ubuf, usize);
+          memcpy((char*)buffer+uindex, d, usize);
+          uindex += usize;
+        }
+      }
+      if (ret!=-1 && uindex>0)
+        ret = uindex;
+    } else {
+      ret = (int)::read(mosFile->fd, buffer, size);
+    }
     if (ret==-1) {
         m68k_set_reg(M68K_REG_D0, errno);
     } else {

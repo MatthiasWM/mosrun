@@ -73,6 +73,7 @@ extern unsigned int theRsrcSize;
 extern mosPtr theJumpTable;
 
 extern bool allout_data_mac_to_utf8;
+extern bool allin_data_utf8_to_mac;
 
 extern char *gRsrcFileBaseName;
 void writeRsrcFiles(const char *basename);
