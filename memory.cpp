@@ -97,6 +97,30 @@ void mosMemoryInit()
     mosCheckMemoryCoherence();
 }
 
+/**
+ Walk the heap block list and report total free space and the size of the
+ largest contiguous free block, for traps like PurgeSpace/FreeMem/MaxMem.
+ */
+void mosFreeMemInfo(unsigned int *outTotal, unsigned int *outContig)
+{
+    unsigned int total = 0, contig = 0;
+    mosPtr b = mosMemBlockStart;
+    for (;;) {
+        uint32_t flags = mosReadUnsafe32(b+mosMemBlockFlags);
+        if (flags==mosMemFlagFree) {
+            uint32_t size = mosReadUnsafe32(b+mosMemBlockSize);
+            total += size;
+            if (size>contig) contig = size;
+        }
+        mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
+        if (next==0) break; // reached the last block
+        b = next;
+    }
+    if (outTotal) *outTotal = total;
+    if (outContig) *outContig = contig;
+}
+
+
 mosPtr mosMalloc(uint size)
 {
     // calculate the minimal block size we need to find

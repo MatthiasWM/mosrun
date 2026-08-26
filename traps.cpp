@@ -1,6 +1,6 @@
 /*
  mosrun - the MacOS MPW runtime emulator
- Copyright (C) 2013-2020  Matthias Melcher
+ Copyright (C) 2013-2026  Matthias Melcher
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -66,6 +66,7 @@ extern "C" {
 
 
 unsigned int trapDispatchTrap = 0;
+unsigned int trapFLineDispatchTrap = 0;
 unsigned int trapExitApp = 0;
 
 
@@ -159,9 +160,9 @@ void trapLoadResource(unsigned short )
     unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
 
     unsigned int ret  = mosRead32(sp); sp += 4;
-    unsigned int hdl  = m68k_read_memory_32(sp); sp+=4;
+    /*unsigned int hdl  =*/ m68k_read_memory_32(sp); sp+=4;
 
-    hdl = 0; // we don;t support unloaded resources, so the resource should still be in memory
+    //hdl = 0; // we don't support unloaded resources, so the resource should still be in memory
 
     sp-=4; m68k_write_memory_32(sp, ret);
 
@@ -467,8 +468,33 @@ void trapSetTrapAddress(unsigned short)
  * sp+4.w = resource id for 'CODE' resource
  * sp.l   = return address = address of the jump table entry plus 6
  *
+ * An unloaded jump table entry is 8 bytes: offset(2), 0x3F3C "MOVE.W
+ * #segNum,-(SP)"(2), segNum(2), 0xA9F0 "_LoadSeg" trap(2). Executing it
+ * pushes segNum then traps, landing here with the entry's own offset at
+ * (ret-8) and segNum already popped as `id`. Once patched, the entry
+ * becomes: id(2), 0x4EF9 "JMP abs32"(2), absolute target(4).
+ *
+ * A segment can have several jump table entries (one per external entry
+ * point). Previously only the one entry that happened to be called first
+ * got patched; every other entry for the same segment stayed as an
+ * unloaded stub until it was individually called, redundantly re-resolving
+ * an already-loaded segment. Since we already know the segment's base
+ * address here, also patch every other unloaded entry for this segment id
+ * that we can find, each using its own offset.
+ *
+ * The entry that actually triggered this call is always patched directly
+ * via `ret`, which is exact regardless of where the jump table lives.
+ * Finding *other* entries for the same segment requires scanning a range,
+ * and most of a segment's entries are typically populated at startup by
+ * whichever segment performs the app's own global/jump-table
+ * initialization (often loaded here as a very early LoadSeg call), not by
+ * CODE 0's own tiny initial jump table -- so the scan covers the whole A5
+ * world (gResourceStart[19]/gResourceEnd[19], set up in createA5World) and
+ * additionally requires the found offset to fall within this segment's own
+ * code, to guard against misinterpreting unrelated global data that
+ * happens to contain the same two marker words.
+ *
  * \todo separate the interface from the code.
- * \todo actually we need to fix *all* jump table entries for this particular ID!
  */
 void trapLoadSeg(unsigned short )
 {
@@ -484,12 +510,32 @@ void trapLoadSeg(unsigned short )
         mosDebug("Code Resource %d not found!\n", id);
     } else {
         unsigned int code = m68k_read_memory_32(hCode);
-        // fix the jump table entry
+        unsigned int codeSize = mosPtrSize(code);
         hexDump(hCode, 64);
-        unsigned int offset = m68k_read_memory_16(ret-8);
-        m68k_write_memory_16(ret-8, id);           // save the block id
-        m68k_write_memory_16(ret-6, 0x4ef9);       // 'jmp nnnnnnnn' instruction
-        m68k_write_memory_32(ret-4, code+offset+4);  // +4 -> skip the entry that gives the number of jump table entries?
+
+        // the entry that triggered this call: always correct, exact address
+        unsigned int triggerEntry = ret-8;
+        unsigned int triggerOffset = m68k_read_memory_16(triggerEntry);
+        m68k_write_memory_16(triggerEntry+0, id);           // save the block id
+        m68k_write_memory_16(triggerEntry+2, 0x4ef9);       // 'jmp nnnnnnnn' instruction
+        m68k_write_memory_32(triggerEntry+4, code+triggerOffset+4);  // +4 -> skip the entry that gives the number of jump table entries?
+
+        // best-effort: patch any other still-unloaded entries for this segment
+        unsigned int entry = gResourceStart[19];
+        unsigned int scanEnd = gResourceEnd[19];
+        for (; entry+8<=scanEnd; entry+=8) {
+            if (entry==triggerEntry) continue;
+            if (m68k_read_memory_16(entry+2)==0x3f3c &&
+                m68k_read_memory_16(entry+6)==0xa9f0 &&
+                m68k_read_memory_16(entry+4)==id) {
+                unsigned int offset = m68k_read_memory_16(entry);
+                if (offset<codeSize) {
+                    m68k_write_memory_16(entry+0, id);
+                    m68k_write_memory_16(entry+2, 0x4ef9);
+                    m68k_write_memory_32(entry+4, code+offset+4);
+                }
+            }
+        }
     }
 
     sp -= 4; m68k_write_memory_32(sp, ret-6);
@@ -662,6 +708,17 @@ void trapSecondsToDate(unsigned short )
 
 /**
  * Return the number of ticks (60th of a second since this computer was switched on.
+ *
+ * Guaranteed to strictly increase on every call. mosrun interprets 68k code
+ * far faster than any real 68k Mac could execute it, so a real-time-based
+ * tick count can legitimately return the same value on two consecutive
+ * calls a few thousand instructions apart -- something a real Mac, bound by
+ * real CPU speed, could never produce. App code that computes an elapsed-
+ * tick delta between two readings is not written to expect a delta of zero,
+ * so without this, such code can compute bogus offsets/pointers from that
+ * delta and crash. Falling back to "last returned value plus one" keeps
+ * real elapsed time when it has genuinely advanced, while still guaranteeing
+ * forward progress when it hasn't.
  */
 unsigned int mosTickCount()
 {
@@ -675,6 +732,9 @@ unsigned int mosTickCount()
     gettimeofday(&tp, 0L);
     unsigned int ticks = tp.tv_sec*60 + tp.tv_usec/(1000000/60);
 #endif
+    static unsigned int lastTicks = 0;
+    if (ticks<=lastTicks) ticks = lastTicks+1;
+    lastTicks = ticks;
     return ticks;
 }
 
@@ -690,11 +750,56 @@ void trapTickCount(unsigned short )
 
 
 /**
+ * [A162] Report free space in the current heap zone.
+ *
+ * PROCEDURE PurgeSpace (VAR total: LongInt; VAR contig: LongInt);
+ *
+ * sp+12.l = total (VAR, out)
+ * sp+8.l  = contig (VAR, out)
+ * sp.l    = return address
+ *
+ * Reports real numbers from mosrun's own heap block list (see mosFreeMemInfo),
+ * so an app that checks available memory before proceeding sees a sane answer
+ * instead of thinking it is critically low on memory.
+ */
+void trapPurgeSpace(unsigned short )
+{
+    unsigned int sp       = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret       = m68k_read_memory_32(sp); sp += 4;
+    unsigned int contigPtr = m68k_read_memory_32(sp); sp += 4;
+    unsigned int totalPtr  = m68k_read_memory_32(sp); sp += 4;
+
+    unsigned int total = 0, contig = 0;
+    mosFreeMemInfo(&total, &contig);
+
+    if (totalPtr) m68k_write_memory_32(totalPtr, total);
+    if (contigPtr) m68k_write_memory_32(contigPtr, contig);
+
+    sp-=4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_D0, 0);
+}
+
+
+/**
  * [A049] Mark a block as purgeable.
  *
  * We never purge blocks in the simulation.
  */
 void trapHPurge(unsigned short )
+{
+    // nothing to do here
+}
+
+
+/**
+ * [A04A] Mark a block as unpurgeable.
+ *
+ * We never purge blocks in the simulation.
+ */
+void trapHNoPurge(unsigned short )
 {
     // nothing to do here
 }
@@ -812,6 +917,33 @@ void trapGetResAttrs(unsigned short )
 
     m68k_set_reg(M68K_REG_SP, sp);
     m68k_set_reg(M68K_REG_D0, 0); // return attributes here
+}
+
+
+/**
+ * [A9A7] Set the attributes for a resource.
+ *
+ * PROCEDURE SetResAttrs (theResource: Handle; attrs: INTEGER);
+ *
+ * sp+6.l  = theResource handle
+ * sp+4.w  = attrs
+ * sp.l    = return address
+ *
+ * Resource attributes (purgeable/locked/protected/preload/changed/system heap)
+ * are irrelevant in this simulation, same stance as ReleaseResource/GetResAttrs.
+ */
+void trapSetResAttrs(unsigned short )
+{
+    unsigned int sp    = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret    = m68k_read_memory_32(sp); sp += 4;
+    /*unsigned int attrs =*/ m68k_read_memory_16(sp); sp += 2;
+    /*unsigned int hdl   =*/ m68k_read_memory_32(sp); sp += 4;
+
+    sp-=4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_D0, 0);
 }
 
 
@@ -1002,6 +1134,26 @@ void trapHOpen(unsigned short )
 
 
 /**
+ * [A9F4] Terminate the application and return control to the shell.
+ *
+ * PROCEDURE ExitToShell;
+ *
+ * Same effect as falling off the end of main() (the 0xaffc pseudo-op in
+ * cpu.cpp), just invoked explicitly by the app instead of via RTS. Mirrors
+ * that same result-code lookup so an app-initiated exit is reported the
+ * same way.
+ */
+void trapExitToShell(unsigned short )
+{
+    unsigned int mpwHandle = m68k_read_memory_32(0x0316);
+    unsigned int mpwMem = m68k_read_memory_32(mpwHandle+4);
+    unsigned int resultCode = m68k_read_memory_32(mpwMem+0x000E);
+    mosDebug("ExitToShell (returns %d)\n", resultCode);
+    exit(resultCode);
+}
+
+
+/**
  * Go here for unimplemented traps.
  *
  * This function serves two purposes. It points out unimplemented traps that
@@ -1090,6 +1242,44 @@ void trapDispatch(unsigned short)
 
 
 /**
+ * Handle F-line (coprocessor / "Line 1111 Emulator") exceptions.
+ *
+ * mosrun does not emulate an FPU or MMU coprocessor. Any F-line instruction
+ * (opcode 0xFxxx) that Musashi does not itself implement raises this real
+ * 68k exception via vector 0x2C, the same mechanism used for A-line traps
+ * via vector 0x28 -- except there is no gCurrentTrap to look up here, since
+ * m68k_instruction_hook only pre-intercepts A-line opcodes before Musashi
+ * executes them. Left unhandled, vector 0x2C used to read back as an
+ * unmapped 0, so the CPU would jump to address 0 and start "executing"
+ * whatever was in low memory, corrupting PC until it happened to wander
+ * into something recognizable. Report the fault clearly and stop instead,
+ * the same way trapUninmplemented does for missing traps.
+ *
+ * The trap vector 0x0000002C points to a 0xaffb instruction, leading here.
+ * The stack contains the processor's exception stack frame; the CPU is in
+ * supervisor mode.
+ */
+void trapFLineDispatch(unsigned short)
+{
+    unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
+    unsigned int new_sr  = m68k_read_memory_16(sp); sp+=2; // pop the status register
+    unsigned int ret_addr = m68k_read_memory_32(sp); sp+=4; // address of the faulting F-line instruction
+    /*unsigned int vec =*/ m68k_read_memory_16(sp); sp+=2;
+
+    unsigned int instr = m68k_read_memory_16(ret_addr);
+    mosError("Unimplemented coprocessor (F-line) instruction 0x%04X at %s\n", instr, printAddr(ret_addr));
+    debug_break();
+
+    // If resumed under a debugger, skip past the offending opcode word so we
+    // do not immediately re-trigger the same fault.
+    sp -= 4; m68k_write_memory_32(sp, ret_addr+2);
+    m68ki_set_sr_noint(new_sr);
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_PC, ret_addr+2);
+}
+
+
+/**
  * Create jump table entry in simulator space.
  */
 mosPtr createGlue(unsigned short index, void (*nativeCodeEntry)(uint16_t))
@@ -1171,7 +1361,10 @@ void mosSetupTrapTable()
     createGlue(0xA029, trapHLock);
     createGlue(0xA02A, trapHUnlock);
     createGlue(0xA049, trapHPurge);
-    // HNoPurge
+    createGlue(0xA04A, trapHNoPurge);
+    createGlue(0xA162, trapPurgeSpace);
+    tncTable[0x0562] = tncTable[0x0162]; // _PurgeSpaceSys, same signature
+    createGlue(0xA9F4, trapExitToShell);
 
     // -- Grow Zone Operations
 
@@ -1224,6 +1417,7 @@ void mosSetupTrapTable()
     createGlue(0xA99B, trapSetResLoad);
     createGlue(0xA9A4, trapHomeResFile);
     createGlue(0xA9A6, trapGetResAttrs);
+    createGlue(0xA9A7, trapSetResAttrs);
 }
 
 

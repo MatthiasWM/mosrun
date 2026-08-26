@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./mosrun ---run \"/Users/matt/dev/Newton/NewtonDev/NewtonDev.ux/NTK 1.6.4/Newton Toolkit\")"
+    ]
+  }
+}

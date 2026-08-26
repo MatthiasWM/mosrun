@@ -145,8 +145,10 @@ unsigned int m68k_read_memory_32(unsigned int address)
         case 0: return 0;
         case 4: return 0;
         case 0x0028: return trapDispatchTrap;
+        case 0x002C: return trapFLineDispatchTrap; // Line1111 (F-line/coprocessor) emulator trap
         case 0x020C: return mosTickCount(); /* Time */
         case 0x0316: return gMosMPWHandle;
+        case 0x0904: return gMosCurrentA5; // CurrentA5 [GLOBAL VAR] boundary between app globals and app parameters
         case 0x0910: // CurApName [GLOBAL VAR] Name of current application (length byte followed by up to 31 characters) name of application [STRING[31]]
         case 0x0914:
         case 0x0918:
@@ -245,6 +247,7 @@ void m68k_write_memory_32(unsigned int address, unsigned int value)
         const char *var = gvarName(address, &rem);
         mosTrace("Write.l 0x%04x = 0x%08X: %s %s\n", address, value, var, rem);
         switch (address) {
+            case 0x0904: gMosCurrentA5 = value; break; // CurrentA5 [GLOBAL VAR]
             default:
                 mosDebug("Writing unsupported RAM.l address 0x%08X\n", address);
                 break;

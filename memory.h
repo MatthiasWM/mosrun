@@ -68,6 +68,8 @@ int mosSetHandleSize(mosHandle, unsigned int);
 
 unsigned int mosCheckBounds(mosPtr, unsigned int size);
 
+void mosFreeMemInfo(unsigned int *outTotal, unsigned int *outContig);
+
 mosPtr mosToPtr(struct MosBlock *block);
 struct MosBlock *mosToBlock(mosPtr ptr);
 

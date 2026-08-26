@@ -1,20 +1,20 @@
 /*
  mosrun - the MacOS MPW runtime emulator
  Copyright (C) 2013  Matthias Melcher
- 
+
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation, either version 3 of the License, or
  (at your option) any later version.
- 
+
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
- 
+
  You should have received a copy of the GNU General Public License
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
- 
+
  The author can be contacted at mosrun AT matthiasm DOT com.
  The latest source code can be found at http://code.google.com/p/dynee5/
  */
@@ -48,11 +48,11 @@ const char *printAddr(unsigned int addr)
     int i = 0;
     for (i=0; i<20; i++) {
         if (addr>=gResourceStart[i] && addr<gResourceEnd[i]) {
-            sprintf(dst, "%02d.%05X", i, addr-gResourceStart[i]);
+            snprintf(dst, 31, "%02d.%05X", i, addr-gResourceStart[i]);
             return dst;
         }
     }
-    sprintf(dst, "%08X", addr);
+    snprintf(dst, 31, "%08X", addr);
     return dst;
 }
 
@@ -277,8 +277,17 @@ unsigned int createA5World(mosHandle hCode0)
     theJumpTable = mosNewPtr(aboveA5+belowA5);
     gMosCurJTOffset = offset;
     mosMemcpy(theJumpTable+belowA5+offset, code0+16, length);
-    gResourceStart[19] = (unsigned int)(theJumpTable + belowA5);
-    gResourceEnd[19] = (unsigned int)(theJumpTable + belowA5 + length);
+    // Covers the whole allocated A5 world (below-A5 globals, the jump table,
+    // and above-A5 globals), not just the length of CODE 0's own initial
+    // jump table data -- CODE 0 typically only pre-populates a handful of
+    // entries (often just the segment that performs the app's real global/
+    // jump-table initialization at startup); the rest of the jump table
+    // ends up populated later, elsewhere in this same block. Used both for
+    // printAddr's debug symbolication and, more importantly, as the search
+    // range trapLoadSeg (traps.cpp) scans to find sibling jump table entries
+    // for a segment that's just been loaded.
+    gResourceStart[19] = (unsigned int)(theJumpTable);
+    gResourceEnd[19] = (unsigned int)(theJumpTable + aboveA5 + belowA5);
     return (unsigned int)(theJumpTable + belowA5);
 }
 

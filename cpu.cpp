@@ -97,6 +97,7 @@ void m68k_instruction_hook()
                     unsigned int resultCode = m68k_read_memory_32(mpwMem+0x000E);
                     mosDebug("End Of Emulation (returns %d)\n", resultCode);
                     exit(resultCode); }
+                case 0xaffb: trapFLineDispatch(instr); break;
                 case 0xaffd: trapDispatch(instr); break;
                 case 0xaffe: trapBreakpoint(instr); goto afterBreakpoint;
                 case 0xafff: trapGoNative(instr); break; // TODO: unverified

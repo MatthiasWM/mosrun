@@ -27,11 +27,13 @@
 
 extern uint16_t gCurrentTrap;
 extern unsigned int trapDispatchTrap;
+extern unsigned int trapFLineDispatchTrap;
 extern unsigned int trapExitApp;
 
 void trapGoNative(unsigned short instr);
 void trapBreakpoint(unsigned short instr);
 void trapDispatch(unsigned short);
+void trapFLineDispatch(unsigned short);
 mosPtr createGlue(unsigned short index, mosTrap trap);
 void mosSetupTrapTable();
 

@@ -204,7 +204,7 @@ int loadCodeFromResourceFork(const char *path)
             mosDisposePtr((mosPtr)theApp);
         }
     }
-#endif  
+#endif
     return 0;
 }
 
@@ -324,7 +324,9 @@ int runApp()
 
     char done = 0;
     while(!done) {
-        m68k_execute(1);
+        m68k_execute(1000000000); // Set to a high number to run indefinitely
+        // Check for exit condition
+        // Check for breakpoints
     }
     return 0;
 }
@@ -348,6 +350,8 @@ int setupSystem(int argc, const char **argv, const char**)
     // create other memory that will be accessed by the emulation
     trapDispatchTrap = mosNewPtr(2);
     mosWrite16(trapDispatchTrap, 0xaffd);
+    trapFLineDispatchTrap = mosNewPtr(2);
+    mosWrite16(trapFLineDispatchTrap, 0xaffb);
     trapExitApp = mosNewPtr(2);
     mosWrite16(trapExitApp, 0xaffc);
 
