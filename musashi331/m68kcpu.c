@@ -405,6 +405,27 @@ static void default_instr_hook_callback(void)
 /* ================================= API ================================== */
 /* ======================================================================== */
 
+/* Matt's extension */
+
+static unsigned int pc_history[M68K_PC_HISTORY_SIZE];
+static int pc_history_index = 0;
+
+void m68ki_add_to_pc_history(unsigned int pc) {
+	pc_history_index--;
+	if (pc_history_index < 0) pc_history_index = M68K_PC_HISTORY_SIZE - 1;
+	pc_history[pc_history_index] = pc;
+}
+
+unsigned int m68k_get_pc_history(int index) {
+	if (index < 0 || index >= M68K_PC_HISTORY_SIZE) {
+		return 0;
+	}
+	int actual_index = pc_history_index + index;
+	if (actual_index >= M68K_PC_HISTORY_SIZE) actual_index -= M68K_PC_HISTORY_SIZE;
+	return pc_history[actual_index];
+}
+
+
 /* Access the internals of the CPU */
 unsigned int m68k_get_reg(void* context, m68k_register_t regnum)
 {
@@ -597,7 +618,7 @@ void m68k_set_cpu_type(unsigned int cpu_type)
 			CYC_DBCC_F_EXP   = 4;
 			CYC_SCC_R_FALSE  = 0;
 			CYC_MOVEM_W      = 2;
-			CYC_MOVEM_L      = 2; 
+			CYC_MOVEM_L      = 2;
 			CYC_SHIFT        = 0;
 			CYC_RESET        = 518;
 			return;
@@ -652,6 +673,9 @@ int m68k_execute(int num_cycles)
 
 			/* Record previous program counter */
 			REG_PPC = REG_PC;
+
+			/* Add the current PC to the PC history ring buffer */
+			m68ki_add_to_pc_history(REG_PC);
 
 			/* Read an instruction and call its handler */
 			REG_IR = m68ki_read_imm_16();

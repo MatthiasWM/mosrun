@@ -104,6 +104,11 @@ void mosTrace(const char *format, ...)
  */
 void mosDebug(const char *format, ...)
 {
+    va_list va;
+    va_start(va, format);
+    vfprintf(stdout, format, va);
+    va_end(va);
+
     if (gMosVerbosity<MOS_VERBOSITY_DEBUG)
         return;
     if (gMosLogFile) {

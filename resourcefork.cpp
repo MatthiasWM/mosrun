@@ -28,9 +28,33 @@
 
 #include <string.h>
 
+extern "C" {
+    #include "musashi331/m68k.h"
+    #include "musashi331/m68kcpu.h"
+    #include "musashi331/m68kops.h"
+}
 
-unsigned int gResourceStart[20] = { 0 };
-unsigned int gResourceEnd[20] = { 0 };
+std::vector<CodeSegmentInfo> gCodeSegments;
+mosPtr gMosA5WorldStart = 0;
+mosPtr gMosA5WorldEnd = 0;
+
+
+/**
+ * Record (or update) the byte range of a loaded 'CODE' resource, for
+ * printAddr()'s debug symbolication.
+ */
+static void recordCodeSegment(int id, mosPtr start, mosPtr end)
+{
+    for (auto &seg : gCodeSegments) {
+        if (seg.id==id) {
+            seg.start = start;
+            seg.end = end;
+            return;
+        }
+    }
+    printf("recordCodeSegment: adding new segment %d from 0x%08X to 0x%08X\n", id, start, end);
+    gCodeSegments.emplace_back(id, start, end);
+}
 
 
 /**
@@ -45,16 +69,34 @@ const char *printAddr(unsigned int addr)
     currBuf = (currBuf+1) & 7;
     char *dst = buf[currBuf];
 
-    int i = 0;
-    for (i=0; i<20; i++) {
-        if (addr>=gResourceStart[i] && addr<gResourceEnd[i]) {
-            snprintf(dst, 31, "%02d.%05X", i, addr-gResourceStart[i]);
+    for (const auto &seg : gCodeSegments) {
+        if (addr>=seg.start && addr<seg.end) {
+            snprintf(dst, 31, "%02d.%05X", seg.id, addr-seg.start);
             return dst;
         }
     }
-    snprintf(dst, 31, "%08X", addr);
+    if (gMosA5WorldStart!=gMosA5WorldEnd && addr>=gMosA5WorldStart && addr<gMosA5WorldEnd) {
+        snprintf(dst, 31, "(A5).%05X", addr-gMosA5WorldStart);
+        return dst;
+    }
+    snprintf(dst, 31, "(ERR).%08X", addr);
     return dst;
 }
+
+void printPCHistory()
+{
+    mosTrace("PC history:\n");
+    mosDebug("   pc: 0x%08X (%s)\n", m68k_get_reg(0L, M68K_REG_PC), printAddr(m68k_get_reg(0L, M68K_REG_PC)));
+    for (int i=0; i<M68K_PC_HISTORY_SIZE; i++) {
+        unsigned int pc = m68k_get_pc_history(i);
+        if (pc==0) break;
+        mosDebug("  %3d: 0x%08X (%s)\n", i, pc, printAddr(pc));
+    }
+}
+
+#define M68K_PC_HISTORY_SIZE 128
+extern void m68ki_add_to_pc_history(unsigned int pc);
+extern unsigned int m68k_get_pc_history(int index);
 
 
 /**
@@ -165,16 +207,15 @@ mosHandle GetResource(unsigned int myResType, unsigned short myId)
                         m68k_write_memory_32((unsigned int)(theRsrc+resTable+12*j+8), hdl);
                         // set breakpoints
                         if (myResType=='CODE') {
+                            mosPtr segStart, segEnd = (unsigned int)(ptr+4) + rsrcSize;
                             if (m68k_read_memory_16((unsigned int)(theApp+rsrcData+rsrcOffset+4))==0xffff) {
-                                installBreakpoints(myId, (unsigned int)(ptr+4+0x24)); // 0x24
-                                gResourceStart[myId] = (unsigned int)(ptr+4+0x24);
-                                gResourceEnd[myId] = (unsigned int)(ptr+4) + rsrcSize;
+                                segStart = (unsigned int)(ptr+4+0x24);
                             } else {
-                                installBreakpoints(myId, (unsigned int)(ptr+4)); // 0x24
-                                gResourceStart[myId] = (unsigned int)(ptr+4);
-                                gResourceEnd[myId] = (unsigned int)(ptr+4) + rsrcSize;
+                                segStart = (unsigned int)(ptr+4);
                             }
-                            mosTrace("Resource %d from 0x%08X to 0x%08X\n", myId, gResourceStart[myId], gResourceEnd[myId]);
+                            installBreakpoints(myId, segStart);
+                            recordCodeSegment(myId, segStart, segEnd);
+                            mosTrace("Resource %d from 0x%08X to 0x%08X\n", myId, segStart, segEnd);
                         }
                         return hdl;
                     }
@@ -236,16 +277,15 @@ mosHandle GetNamedResource(unsigned int myResType, const byte *pName)
                         m68k_write_memory_32((unsigned int)(theRsrc+resTable+12*j+8), hdl);
                         // set breakpoints
                         if (myResType=='CODE') {
+                            mosPtr segStart, segEnd = (unsigned int)(ptr+4) + rsrcSize;
                             if (m68k_read_memory_16((unsigned int)(theApp+rsrcData+rsrcOffset+4))==0xffff) {
-                                installBreakpoints(id, (unsigned int)(ptr+4+0x24)); // 0x24
-                                gResourceStart[id] = (unsigned int)(ptr+4+0x24);
-                                gResourceEnd[id] = (unsigned int)(ptr+4) + rsrcSize;
+                                segStart = (unsigned int)(ptr+4+0x24);
                             } else {
-                                installBreakpoints(id, (unsigned int)(ptr+4)); // 0x24
-                                gResourceStart[id] = (unsigned int)(ptr+4);
-                                gResourceEnd[id] = (unsigned int)(ptr+4) + rsrcSize;
+                                segStart = (unsigned int)(ptr+4);
                             }
-                            mosTrace("Resource %d from 0x%08X to 0x%08X\n", id, gResourceStart[id], gResourceEnd[id]);
+                            installBreakpoints(id, segStart);
+                            recordCodeSegment(id, segStart, segEnd);
+                            mosTrace("Resource %d from 0x%08X to 0x%08X\n", id, segStart, segEnd);
                         }
                         return hdl;
                     }
@@ -285,9 +325,11 @@ unsigned int createA5World(mosHandle hCode0)
     // ends up populated later, elsewhere in this same block. Used both for
     // printAddr's debug symbolication and, more importantly, as the search
     // range trapLoadSeg (traps.cpp) scans to find sibling jump table entries
-    // for a segment that's just been loaded.
-    gResourceStart[19] = (unsigned int)(theJumpTable);
-    gResourceEnd[19] = (unsigned int)(theJumpTable + aboveA5 + belowA5);
+    // for a segment that's just been loaded. A dedicated pair of globals,
+    // not a CodeSegmentInfo entry -- this isn't a CODE resource and must
+    // not collide with one's ID.
+    gMosA5WorldStart = (unsigned int)(theJumpTable);
+    gMosA5WorldEnd = (unsigned int)(theJumpTable + aboveA5 + belowA5);
     return (unsigned int)(theJumpTable + belowA5);
 }
 

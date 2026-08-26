@@ -1836,6 +1836,11 @@ INLINE void m68ki_check_interrupts(void)
 }
 
 
+#define M68K_PC_HISTORY_SIZE 128
+extern void m68ki_add_to_pc_history(unsigned int pc);
+extern unsigned int m68k_get_pc_history(int index);
+
+
 
 /* ======================================================================== */
 /* ============================== END OF FILE ============================= */

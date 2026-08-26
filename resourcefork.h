@@ -26,9 +26,31 @@
 
 #include "main.h"
 
+#include <vector>
 
-extern unsigned int gResourceStart[];
-extern unsigned int gResourceEnd[];
+
+/**
+ * Byte range in mos memory occupied by one loaded 'CODE' resource, recorded
+ * purely for printAddr()'s debug symbolication -- not used by the emulator
+ * for anything functional.
+ */
+class CodeSegmentInfo {
+public:
+    CodeSegmentInfo(int id, mosPtr start, mosPtr end) : id(id), start(start), end(end) { }
+    int id;
+    mosPtr start;
+    mosPtr end;
+};
+
+extern std::vector<CodeSegmentInfo> gCodeSegments;
+
+// The A5 world (below-A5 globals, jump table, above-A5 globals), as one
+// contiguous span, set up by createA5World(). Used by trapLoadSeg (traps.cpp)
+// to search for sibling jump table entries, and by printAddr() as a fallback
+// label. Deliberately separate from gCodeSegments/CodeSegmentInfo -- this is
+// not a CODE resource and must not share a resource ID's slot.
+extern mosPtr gMosA5WorldStart;
+extern mosPtr gMosA5WorldEnd;
 
 
 void dumpResourceMap();
@@ -37,6 +59,7 @@ mosHandle GetNamedResource(unsigned int myResType, const byte *pName);
 unsigned int createA5World(mosHandle hCode0);
 void readResourceMap();
 const char *printAddr(unsigned int addr);
+void printPCHistory();
 
 
 #endif /* defined(__mosrun__resourcefork__) */

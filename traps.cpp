@@ -56,6 +56,11 @@
 #include "systemram.h"
 #include "fileio.h"
 #include "gestalt.h"
+#include "quickdraw.h"
+#include "windowmgr.h"
+#include "eventmgr.h"
+#include "menumgr.h"
+#include "dialogmgr.h"
 
 // Inlcude Musahi's m68k emulator
 
@@ -490,7 +495,7 @@ void trapSetTrapAddress(unsigned short)
  * whichever segment performs the app's own global/jump-table
  * initialization (often loaded here as a very early LoadSeg call), not by
  * CODE 0's own tiny initial jump table -- so the scan covers the whole A5
- * world (gResourceStart[19]/gResourceEnd[19], set up in createA5World) and
+ * world (gMosA5WorldStart/gMosA5WorldEnd, set up in createA5World) and
  * additionally requires the found offset to fall within this segment's own
  * code, to guard against misinterpreting unrelated global data that
  * happens to contain the same two marker words.
@@ -522,8 +527,8 @@ void trapLoadSeg(unsigned short )
         m68k_write_memory_32(triggerEntry+4, code+triggerOffset+4);  // +4 -> skip the entry that gives the number of jump table entries?
 
         // best-effort: patch any other still-unloaded entries for this segment
-        unsigned int entry = gResourceStart[19];
-        unsigned int scanEnd = gResourceEnd[19];
+        unsigned int entry = gMosA5WorldStart;
+        unsigned int scanEnd = gMosA5WorldEnd;
         for (; entry+8<=scanEnd; entry+=8) {
             if (entry==triggerEntry) continue;
             if (m68k_read_memory_16(entry+2)==0x3f3c &&
@@ -603,7 +608,11 @@ void trapHUnlock(unsigned short ) {
 /**
  * Convert a 32-bit number into a 24-bit address.
  *
- * This function has been obsolete since 1992.
+ * This function has been obsolete since 1992. Despite the Pascal-looking
+ * documented signature (FUNCTION StripAddress (theAddress: Ptr) : Ptr),
+ * real compiled callers invoke it as a register-based identity passthrough
+ * (documentation conflicting if it is A0 to A0 or D0 to D0)), the same
+ * "quick" convention as HLock/HUnlock
  */
 void trapStripAddress(unsigned short ) {
     // nothing to do here
@@ -829,7 +838,7 @@ void trapCurResFile(unsigned short )
 
     unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
 
-    m68k_write_memory_32(sp, 1);  // my resource ID
+    m68k_write_memory_16(sp, 1);  // my resource ID
     sp-=4; m68k_write_memory_32(sp, ret);
 
     m68k_set_reg(M68K_REG_SP, sp);
@@ -1411,6 +1420,11 @@ void mosSetupTrapTable()
     createGlue(0xA9A7, trapSetResAttrs);
 
     mosSetupGestaltTraps();
+    mosSetupQuickDrawTraps();
+    mosSetupWindowMgrTraps();
+    mosSetupEventMgrTraps();
+    mosSetupMenuMgrTraps();
+    mosSetupDialogMgrTraps();
 }
 
 

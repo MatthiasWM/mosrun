@@ -24,6 +24,7 @@
 
 #include "traps.h"
 #include "log.h"
+#include "resourcefork.h"
 
 extern "C" {
 #include "musashi331/m68k.h"
@@ -35,10 +36,9 @@ extern "C" {
  *
  * FUNCTION Gestalt (selector: OSType; VAR response: LongInt) : OSErr;
  *
- * sp+14.w = return value (OSErr)
- * sp+8.l  = response (VAR, out)
- * sp+4.l  = selector
- * sp.l    = return address
+ * d0       = selector
+ * a1       = response (VAR, out)
+ * d0[out]  = return value (OSErr)
  *
  * 1990s-era apps use this to detect available features before calling into
  * a Toolbox manager, so it needs to exist even before any of the managers
@@ -50,11 +50,8 @@ extern "C" {
  */
 void trapGestalt(unsigned short )
 {
-    unsigned int sp          = m68k_get_reg(0L, M68K_REG_SP);
-
-    unsigned int ret         = m68k_read_memory_32(sp); sp += 4;
-    unsigned int responsePtr = m68k_read_memory_32(sp); sp += 4;
-    unsigned int selector    = m68k_read_memory_32(sp); sp += 4;
+    unsigned int responsePtr = m68k_get_reg(0L, M68K_REG_A1); // VAR response: LongInt
+    unsigned int selector    = m68k_get_reg(0L, M68K_REG_D0); // OSType selector
 
     unsigned int response = 0;
     short err = 0; // noErr
@@ -82,18 +79,15 @@ void trapGestalt(unsigned short )
             response = 1; // gestalt68k -- honest, since we're running the 68k side of this fat binary
             break;
         default:
-            mosDebug("Gestalt: unknown selector '%c%c%c%c', reporting gestaltUndefSelectorErr\n",
-                     selector>>24, selector>>16, selector>>8, selector);
+            mosDebug("Gestalt: unknown selector '%c%c%c%c' (0x%08X), reporting gestaltUndefSelectorErr\n",
+                     selector>>24, selector>>16, selector>>8, selector, selector);
+            //printPCHistory();
             err = -5551; // gestaltUndefSelectorErr
             response = 0;
             break;
     }
 
     if (responsePtr) m68k_write_memory_32(responsePtr, response);
-    m68k_write_memory_32(sp, (unsigned int)(short)err);
-    sp -= 4; m68k_write_memory_32(sp, ret);
-
-    m68k_set_reg(M68K_REG_SP, sp);
     m68k_set_reg(M68K_REG_D0, (unsigned int)(short)err);
 }
 

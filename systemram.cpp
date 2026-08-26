@@ -28,12 +28,23 @@
 #include "memory.h"
 #include "breakpoints.h"
 #include "traps.h"
+#include "windowmgr.h"
+#include "resourcefork.h"
+
+// Inlcude Musahi's m68k emulator
+
+extern "C" {
+#include "musashi331/m68k.h"
+#include "musashi331/m68kcpu.h"
+#include "musashi331/m68kops.h"
+}
 
 
 unsigned int gMosCurrentA5 = 0;
 unsigned int gMosCurrentStackBase = 0;
 unsigned int gMosCurJTOffset = 0;
 unsigned int gMosResLoad = 1;
+unsigned int gMosSegHiEnable = 0;
 unsigned int gMosResErr = 0;
 unsigned int gMosMPWHandle = 0;
 
@@ -89,8 +100,12 @@ unsigned int m68k_read_memory_8(unsigned int address)
     }
     switch (address) {
         case 0x012d: return 0; // LoadTrap [GLOBAL VAR]  trap before launch? [byte]
+        case 0x0BB2: return gMosSegHiEnable; // SegHiEnable [GLOBAL VAR]  (byte) 0 to disable MoveHHi in LoadSeg
         default:
-            mosDebug("Accessing unsupported RAM.b address 0x%08X\n", address);
+            mosDebug("Accessing unsupported RAM.b address 0x%08X from pc=0x%08X (CODE %s)\n",
+                address, m68k_get_reg(0L, M68K_REG_PC),
+                printAddr(m68k_get_reg(0L, M68K_REG_PC)));
+            printPCHistory();
             break;
     }
     return 0;
@@ -121,7 +136,11 @@ unsigned int m68k_read_memory_16(unsigned int address)
         case 0x0220: return mosGetMemError();
         case 0x0930: return 0; // FIXME: SaveSegHandle [GLOBAL VAR]  seg 0 handle [handle]
         default:
-            mosDebug("Accessing unsupported RAM.w address 0x%08X\n", address);
+            mosDebug("Accessing unsupported RAM.w address 0x%08X from pc=0x%08X (CODE %s)\n",
+                address, m68k_get_reg(0L, M68K_REG_PC),
+                printAddr(m68k_get_reg(0L, M68K_REG_PC))
+            );
+            printPCHistory();
             break;
     }
     return 0;
@@ -149,6 +168,7 @@ unsigned int m68k_read_memory_32(unsigned int address)
         case 0x020C: return mosTickCount(); /* Time */
         case 0x0316: return gMosMPWHandle;
         case 0x0904: return gMosCurrentA5; // CurrentA5 [GLOBAL VAR] boundary between app globals and app parameters
+        case 0x09D6: return gMosWindowList; // WindowList [GLOBAL VAR]
         case 0x0910: // CurApName [GLOBAL VAR] Name of current application (length byte followed by up to 31 characters) name of application [STRING[31]]
         case 0x0914:
         case 0x0918:
@@ -159,7 +179,10 @@ unsigned int m68k_read_memory_32(unsigned int address)
         case 0x092c:
             return 0;
         default:
-            mosDebug("Accessing unsupported RAM.l address 0x%08X\n", address);
+            mosDebug("Accessing unsupported RAM.l address 0x%08X from pc=0x%08X (CODE %s)\n",
+                address, m68k_get_reg(0L, M68K_REG_PC),
+                printAddr(m68k_get_reg(0L, M68K_REG_PC)));
+            printPCHistory();
             break;
     }
     return 0;
@@ -206,6 +229,7 @@ void m68k_write_memory_8(unsigned int address, unsigned int value)
         mosTrace("Write.b 0x%04x = 0x%02X: %s %s\n", address, value & 0xff, var, rem);
         switch (address) {
             case 0x0a5e: gMosResLoad = value; break; // ResLoad       0A5E  word  Auto-load feature
+            case 0x0BB2: gMosSegHiEnable = value; break; // SegHiEnable [GLOBAL VAR]  (byte) 0 to disable MoveHHi in LoadSeg
             default:
                 mosDebug("Writing unsupported RAM.b address 0x%08X\n", address);
                 break;
@@ -248,6 +272,7 @@ void m68k_write_memory_32(unsigned int address, unsigned int value)
         mosTrace("Write.l 0x%04x = 0x%08X: %s %s\n", address, value, var, rem);
         switch (address) {
             case 0x0904: gMosCurrentA5 = value; break; // CurrentA5 [GLOBAL VAR]
+            case 0x09D6: gMosWindowList = value; break; // WindowList [GLOBAL VAR]
             default:
                 mosDebug("Writing unsupported RAM.l address 0x%08X\n", address);
                 break;

@@ -31,6 +31,7 @@ extern unsigned int gMosCurrentA5;
 extern unsigned int gMosCurrentStackBase;
 extern unsigned int gMosCurJTOffset;
 extern unsigned int gMosResLoad;
+extern unsigned int gMosSegHiEnable;
 extern unsigned int gMosResErr;
 extern unsigned int gMosMemErr;
 extern unsigned int gMosMPWHandle;
