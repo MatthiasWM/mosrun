@@ -35,6 +35,7 @@ extern unsigned int gMosSegHiEnable;
 extern unsigned int gMosResErr;
 extern unsigned int gMosMemErr;
 extern unsigned int gMosMPWHandle;
+extern unsigned int gMosHWCfgFlags;
 
 extern "C" {
 unsigned int m68k_read_memory_8(unsigned int address);

@@ -61,6 +61,33 @@ void m68k_instruction_hook()
     afterBreakpoint:
         mosPtr pc = m68k_get_reg(0L, M68K_REG_PC);
         uint16_t instr = m68k_read_memory_16(pc);
+
+#if 0 // leaving this code in here if I need to trace the stack again
+        static bool trace = false;
+        static unsigned int trace_sp = 0;
+        static unsigned int trace_ret = 0;
+        if (pc == 0x003F1160) {
+            trace_sp = m68k_get_reg(0L, M68K_REG_SP);
+            mosDebug("trace_sp = 0x%08x\n", trace_sp);
+            trace_ret = m68k_read_memory_32(trace_sp);
+            mosDebug("%s\n", printAddr(trace_ret));
+            trace = true;
+        }
+        if (trace) {
+            unsigned int ret = m68k_read_memory_32(trace_sp);
+            if (ret != trace_ret) {
+                printPCHistory();
+                exit(0);
+            }
+        }
+        if (pc >= 0x003F1160 && pc < 0x003F1160 + 0x0000015C) {
+            char buf[255];
+            m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+            mosDebug("sp: 0x%08x -> ", m68k_get_reg(0L, M68K_REG_SP));
+            mosDebug("0x%s: %s\n", printAddr(pc), buf);
+        }
+#endif
+
         if (mosLogFile() && mosLogVerbosity()>=MOS_VERBOSITY_TRACE) {
             if (mosLogFile()!=stdout) {
                 mosTrace("\n");

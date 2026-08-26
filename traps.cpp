@@ -680,6 +680,24 @@ void trapOSDispatch(unsigned short )
             if (resultCodePtr) m68k_write_memory_16(resultCodePtr, 0);
             break;
         }
+        case 0x3A: { // OSErr GetProcessInformation(PSN: ProcessSerialNumber,
+                     //                             VAR info: ProcessInfoRec);
+            // Documented as a stack-based Pascal call with PSN passed by
+            // value, but confirmed via real disassembly at the actual call
+            // site (CODE 78, offset 0xCC) that the compiled glue builds
+            // local copies of both PSN and ProcessInfoRec on its own stack
+            // and passes POINTERS to both
+            // We will assume kCurrent Process for the PSN
+            unsigned int infoPtr = m68k_read_memory_32(sp); sp += 4;
+            /*unsigned int psnPtr =*/ m68k_read_memory_32(sp); sp += 4;
+
+            // Minimal, safe stub: report success without filling in any
+            // individual ProcessInfoRec fields beyond what the caller
+            // already zeroed itself.
+            (void)infoPtr;
+            m68k_write_memory_16(sp, 0); // noErr
+            break;
+        }
         default:
             mosError("Unimplemented OSDispatch 0x%02X\n", selector);
             debug_break();

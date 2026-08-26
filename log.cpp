@@ -35,7 +35,7 @@ extern "C" {
 
 
 static FILE *gMosLogFile = stderr;
-static int gMosVerbosity = MOS_VERBOSITY_WARN;
+static int gMosVerbosity = MOS_VERBOSITY_DEBUG;
 
 
 void mosLogVerbosity(int v)
@@ -85,7 +85,7 @@ void mosLogClose()
  */
 void mosTrace(const char *format, ...)
 {
-    if (gMosVerbosity<MOS_VERBOSITY_TRACE)
+    if (gMosVerbosity < MOS_VERBOSITY_TRACE)
         return;
     if (gMosLogFile) {
         va_list va;
@@ -109,7 +109,7 @@ void mosDebug(const char *format, ...)
     vfprintf(stdout, format, va);
     va_end(va);
 
-    if (gMosVerbosity<MOS_VERBOSITY_DEBUG)
+    if (gMosVerbosity < MOS_VERBOSITY_DEBUG)
         return;
     if (gMosLogFile) {
         va_list va;
@@ -128,7 +128,7 @@ void mosDebug(const char *format, ...)
  */
 void mosLog(const char *format, ...)
 {
-    if (gMosVerbosity<MOS_VERBOSITY_LOG)
+    if (gMosVerbosity < MOS_VERBOSITY_LOG)
         return;
     if (gMosLogFile) {
         va_list va;
@@ -148,7 +148,7 @@ void mosLog(const char *format, ...)
  */
 void mosWarning(const char *format, ...)
 {
-    if (gMosVerbosity<MOS_VERBOSITY_WARN)
+    if (gMosVerbosity < MOS_VERBOSITY_WARN)
         return;
     va_list va;
     va_start(va, format);
@@ -174,7 +174,7 @@ void mosWarning(const char *format, ...)
  */
 void mosError(const char *format, ...)
 {
-    if (gMosVerbosity<MOS_VERBOSITY_ERR)
+    if (gMosVerbosity < MOS_VERBOSITY_ERR)
         return;
     va_list va;
     va_start(va, format);

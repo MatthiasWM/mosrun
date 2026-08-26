@@ -23,6 +23,7 @@
 #include "dialogmgr.h"
 
 #include "traps.h"
+#include "log.h"
 
 extern "C" {
 #include "musashi331/m68k.h"
@@ -54,7 +55,55 @@ void trapInitDialogs(unsigned short )
 }
 
 
+/**
+ * [A985] Display an alert box and return the item the user picked.
+ *
+ * FUNCTION Alert (alertID: Integer; filterProc: ModalFilterProcPtr): Integer;
+ *
+ * Stack at trap entry:
+ * sp+0.l  = return address
+ * sp+4.l  = filterProc (pushed last, on top before the trap fires)
+ * sp+8.w  = alertID
+ * sp+10.w = reserved Integer function result
+ *
+ * No real alert is ever drawn and the filter proc is never called (per
+ * explicit direction) -- this always reports item 1 (the default/OK
+ * button) as a placeholder; picking the *correct* item number for a real
+ * alert's actual button layout is left for later. Logged at warning level
+ * (visible by default, not buried in trace output) since a popped alert is
+ * effectively NTK's failure-reporting channel -- worth seeing even in a
+ * normal run.
+ *
+ * Note: typedef CALLBACK_API( Boolean , ModalFilterProcPtr )(DialogRef theDialog, EventRecord *theEvent, DialogItemIndex *itemHit);
+ *
+ * Note: StopAlert ($A986), NoteAlert ($A987), and CautionAlert ($A988) are
+ * the very next three trap numbers — same signature, same calling
+ * convention, just a different icon
+ *
+ * (137): Your computer lacks the required hardware or system software to
+ *        run this application.
+ */
+void trapAlert(unsigned short )
+{
+    unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret         = m68k_read_memory_32(sp); sp += 4;
+    /*unsigned int filterProc =*/ m68k_read_memory_32(sp); sp += 4;
+    unsigned int alertID     = m68k_read_memory_16(sp); sp += 2;
+
+    mosWarning("Alert(%d) -- no real dialog shown, auto-answering item 1\n", (short)alertID);
+
+    m68k_write_memory_16(sp, 1); // itemHit = 1 (default/OK), placeholder
+
+    sp -= 4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_D0, 1);
+}
+
+
 void mosSetupDialogMgrTraps()
 {
     createGlue(0xA97B, trapInitDialogs);
+    createGlue(0xA985, trapAlert);
 }

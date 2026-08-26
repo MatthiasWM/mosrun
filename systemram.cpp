@@ -47,6 +47,7 @@ unsigned int gMosResLoad = 1;
 unsigned int gMosSegHiEnable = 0;
 unsigned int gMosResErr = 0;
 unsigned int gMosMPWHandle = 0;
+unsigned int gMosHWCfgFlags = 0;
 
 
 
@@ -102,7 +103,7 @@ unsigned int m68k_read_memory_8(unsigned int address)
         case 0x012d: return 0; // LoadTrap [GLOBAL VAR]  trap before launch? [byte]
         case 0x0BB2: return gMosSegHiEnable; // SegHiEnable [GLOBAL VAR]  (byte) 0 to disable MoveHHi in LoadSeg
         default:
-            mosDebug("Accessing unsupported RAM.b address 0x%08X from pc=0x%08X (CODE %s)\n",
+            mosDebug("Reading unsupported RAM.b address 0x%08X from pc=0x%08X (CODE %s)\n",
                 address, m68k_get_reg(0L, M68K_REG_PC),
                 printAddr(m68k_get_reg(0L, M68K_REG_PC)));
             printPCHistory();
@@ -135,8 +136,9 @@ unsigned int m68k_read_memory_16(unsigned int address)
         case 0x0a60: return gMosResErr; // Resource Manager error code
         case 0x0220: return mosGetMemError();
         case 0x0930: return 0; // FIXME: SaveSegHandle [GLOBAL VAR]  seg 0 handle [handle]
+        case 0x0B22: return gMosHWCfgFlags; // HWCfgFlags [GLOBAL VAR]  (word) hardware configuration flags
         default:
-            mosDebug("Accessing unsupported RAM.w address 0x%08X from pc=0x%08X (CODE %s)\n",
+            mosDebug("Reading unsupported RAM.s address 0x%08X from pc=0x%08X (CODE %s)\n",
                 address, m68k_get_reg(0L, M68K_REG_PC),
                 printAddr(m68k_get_reg(0L, M68K_REG_PC))
             );
@@ -179,7 +181,7 @@ unsigned int m68k_read_memory_32(unsigned int address)
         case 0x092c:
             return 0;
         default:
-            mosDebug("Accessing unsupported RAM.l address 0x%08X from pc=0x%08X (CODE %s)\n",
+            mosDebug("Reading unsupported RAM.l address 0x%08X from pc=0x%08X (CODE %s)\n",
                 address, m68k_get_reg(0L, M68K_REG_PC),
                 printAddr(m68k_get_reg(0L, M68K_REG_PC)));
             printPCHistory();
@@ -250,8 +252,9 @@ void m68k_write_memory_16(unsigned int address, unsigned int value)
         const char *var = gvarName(address, &rem);
         mosTrace("Write.w 0x%04x = 0x%04X: %s %s\n", address, value & 0xffff, var, rem);
         switch (address) {
+            case 0x0B22: gMosHWCfgFlags = value; break; // HWCfgFlags [GLOBAL VAR]  (word) hardware configuration flags
             default:
-                mosDebug("Writing unsupported RAM.w address 0x%08X\n", address);
+                mosDebug("Writing unsupported RAM.s address 0x%08X\n", address);
                 break;
         }
     }
