@@ -25,6 +25,7 @@ set(
     traps.cpp traps.h
     filename.cpp filename.h
     systemram.cpp systemram.h
+    gestalt.cpp gestalt.h
     ./musashi331/m68kops.c
     ./musashi331/m68kopac.c
     ./musashi331/m68kopnz.c

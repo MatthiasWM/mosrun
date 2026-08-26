@@ -35,6 +35,7 @@
 #endif
 #include <assert.h>
 
+
 // This is the emulated RAM.
 byte *MosMem;
 

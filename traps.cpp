@@ -55,6 +55,7 @@
 #include "breakpoints.h"
 #include "systemram.h"
 #include "fileio.h"
+#include "gestalt.h"
 
 // Inlcude Musahi's m68k emulator
 
@@ -707,35 +708,30 @@ void trapSecondsToDate(unsigned short )
 
 
 /**
- * Return the number of ticks (60th of a second since this computer was switched on.
+ * Return the number of ticks (60th of a second) since this computer was
+ * switched on.
  *
- * Guaranteed to strictly increase on every call. mosrun interprets 68k code
- * far faster than any real 68k Mac could execute it, so a real-time-based
- * tick count can legitimately return the same value on two consecutive
- * calls a few thousand instructions apart -- something a real Mac, bound by
- * real CPU speed, could never produce. App code that computes an elapsed-
- * tick delta between two readings is not written to expect a delta of zero,
- * so without this, such code can compute bogus offsets/pointers from that
- * delta and crash. Falling back to "last returned value plus one" keeps
- * real elapsed time when it has genuinely advanced, while still guaranteeing
- * forward progress when it hasn't.
+ * Derived from Musashi's own emulated-cycle counter (m68k_cycles_run()),
+ * not host wall-clock time. A real Mac's TickCount is tied to a hardware
+ * clock whose rate is fixed relative to the CPU's own execution speed, so
+ * app code is free to assume elapsed ticks correlate with how much 68k
+ * code has actually run -- some startup code (e.g. a CPU-speed
+ * calibration loop that reads TickCount before/after a fixed busy-loop
+ * and divides iterations by elapsed ticks) depends on exactly that.
+ * mosrun's own interpretation speed relative to the host has nothing to
+ * do with the *emulated* CPU's speed, so backing this with real elapsed
+ * host time made such code see wildly different (sometimes zero) deltas
+ * depending purely on how fast mosrun happened to run that session --
+ * notably different between traced and untraced runs. Deriving ticks from
+ * emulated cycles instead makes this deterministic and independent of
+ * host speed. ~16MHz is a plausible clock speed for a 68020-class Mac of
+ * this era; exact fidelity doesn't matter, only that elapsed ticks scale
+ * with emulated work the way real hardware guarantees.
  */
 unsigned int mosTickCount()
 {
-#ifdef WIN32
-	SYSTEMTIME time;
-	GetSystemTime(&time);
-	unsigned int ticks = time.wMilliseconds * 60 / 1000
-		+ 60 * (time.wSecond + 60 * time.wMinute + 60 * 60 * time.wHour);
-#else
-    struct timeval tp;
-    gettimeofday(&tp, 0L);
-    unsigned int ticks = tp.tv_sec*60 + tp.tv_usec/(1000000/60);
-#endif
-    static unsigned int lastTicks = 0;
-    if (ticks<=lastTicks) ticks = lastTicks+1;
-    lastTicks = ticks;
-    return ticks;
+    const unsigned int cyclesPerTick = 16000000 / 60;
+    return (unsigned int)m68k_cycles_run() / cyclesPerTick;
 }
 
 
@@ -754,9 +750,15 @@ void trapTickCount(unsigned short )
  *
  * PROCEDURE PurgeSpace (VAR total: LongInt; VAR contig: LongInt);
  *
- * sp+12.l = total (VAR, out)
- * sp+8.l  = contig (VAR, out)
- * sp.l    = return address
+ * Documented as a stack-based Pascal call with two VAR parameters, but it
+ * is actually register-based like the other lightweight Memory Manager
+ * "quick" traps (HLock, DisposeHandle, etc.): the caller's own glue code
+ * (compiled after the trap opcode) reads the results out of D0/A0 and
+ * copies them into the real VAR parameter locations itself; the trap never
+ * touches the stack. Confirmed against real disassembly of the call site:
+ * the glue does `MOVE.L A0,(ptr1)` then `MOVE.L D0,(ptr2)`, where ptr1 is
+ * `contig` (pushed second, shallower on the stack) and ptr2 is `total`
+ * (pushed first, deeper) -- i.e. A0=contig, D0=total.
  *
  * Reports real numbers from mosrun's own heap block list (see mosFreeMemInfo),
  * so an app that checks available memory before proceeding sees a sane answer
@@ -764,22 +766,11 @@ void trapTickCount(unsigned short )
  */
 void trapPurgeSpace(unsigned short )
 {
-    unsigned int sp       = m68k_get_reg(0L, M68K_REG_SP);
-
-    unsigned int ret       = m68k_read_memory_32(sp); sp += 4;
-    unsigned int contigPtr = m68k_read_memory_32(sp); sp += 4;
-    unsigned int totalPtr  = m68k_read_memory_32(sp); sp += 4;
-
     unsigned int total = 0, contig = 0;
     mosFreeMemInfo(&total, &contig);
 
-    if (totalPtr) m68k_write_memory_32(totalPtr, total);
-    if (contigPtr) m68k_write_memory_32(contigPtr, contig);
-
-    sp-=4; m68k_write_memory_32(sp, ret);
-
-    m68k_set_reg(M68K_REG_SP, sp);
-    m68k_set_reg(M68K_REG_D0, 0);
+    m68k_set_reg(M68K_REG_D0, total);
+    m68k_set_reg(M68K_REG_A0, contig);
 }
 
 
@@ -1418,6 +1409,8 @@ void mosSetupTrapTable()
     createGlue(0xA9A4, trapHomeResFile);
     createGlue(0xA9A6, trapGetResAttrs);
     createGlue(0xA9A7, trapSetResAttrs);
+
+    mosSetupGestaltTraps();
 }
 
 
