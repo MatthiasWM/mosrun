@@ -682,12 +682,40 @@ void trapOSDispatch(unsigned short )
         }
         case 0x3A: { // OSErr GetProcessInformation(PSN: ProcessSerialNumber,
                      //                             VAR info: ProcessInfoRec);
-            // Documented as a stack-based Pascal call with PSN passed by
-            // value, but confirmed via real disassembly at the actual call
-            // site (CODE 78, offset 0xCC) that the compiled glue builds
-            // local copies of both PSN and ProcessInfoRec on its own stack
-            // and passes POINTERS to both
-            // We will assume kCurrent Process for the PSN
+            // TYPE ProcessInfoRec =
+            // RECORD
+            //     processInfoLength:   LongInt;       {0: length of process info record (56)}
+            //     processName:         StringPtr;     {4: name of this process}
+            //     processNumber:       ProcessSerialNumber;
+            //                                         {8: psn of this process}
+            //     processType:         LongInt;       {12: file type of application file}
+            //     processSignature:    OSType;        {16: signature of application file}
+            //     processMode:         LongInt;       {20: 'SIZE' resource flags}
+            //     processLocation:     Ptr;           {24: address of partition}
+            //     processSize:         LongInt;       {28: partition size}
+            //     processFreeMem:      LongInt;       {32: free bytes in heap}
+            //     processLauncher:     ProcessSerialNumber;
+            //                                         {36: process that launched this one}
+            //     processLaunchDate:   LongInt;       {44: time when launched}
+            //     processActiveTime:   LongInt;       {48: accumulated CPU time}
+            //     processAppSpec:      FSSpecPtr;     {52: location of the file}
+            // END;
+            // process mode flags:
+            // modeDeskAccessory             = $00020000;
+            // modeMultiLaunch               = $00010000;
+            // modeNeedSuspendResume         = $00004000;
+            // modeCanBackground             = $00001000;
+            // modeDoesActivateOnFGSwitch    = $00000800;
+            // modeOnlyBackground            = $00000400;
+            // modeGetFrontClicks            = $00000200;
+            // modeGetAppDiedMsg             = $00000100;
+            // mode32BitCompatible           = $00000080;
+            // modeHighLevelEventAware       = $00000040;
+            // modeLocalAndRemoteHLEvents    = $00000020;
+            // modeStationeryAware           = $00000010;
+            // modeUseTextEditServices       = $00000008;
+
+
             unsigned int infoPtr = m68k_read_memory_32(sp); sp += 4;
             /*unsigned int psnPtr =*/ m68k_read_memory_32(sp); sp += 4;
 
@@ -837,7 +865,7 @@ void trapReleaseResource(unsigned short )
     unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
     unsigned int res  = m68k_read_memory_16(sp); sp += 4;
 
-    res = 0; // don't actually do anything
+    (void)res; // don't actually do anything
 
     sp -= 4; m68k_write_memory_32(sp, ret);
 
@@ -899,7 +927,7 @@ void trapHomeResFile(unsigned short )
     unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
     unsigned int hdl  = m68k_read_memory_32(sp); sp += 4;
 
-    hdl = 0;
+    (void)hdl;
 
     m68k_write_memory_32(sp, 0);
     sp-=4; m68k_write_memory_32(sp, ret);
@@ -928,7 +956,7 @@ void trapGetResAttrs(unsigned short )
 
     unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
     unsigned int hdl  = m68k_read_memory_32(sp); sp += 4;
-
+    (void)hdl;
 
     m68k_write_memory_32(sp, 0);
     sp-=4; m68k_write_memory_32(sp, ret);  // FIXME: stack correct?
@@ -1188,6 +1216,14 @@ void trapUninmplemented(unsigned short ) {
     debug_break();
 }
 
+void trapPopUpMenuSelect(unsigned short ) {
+    // FIXME: $a01f; opcode 1010 (_DisposePtr)
+    mosError("Unimplemented trap PopUpMenuSelect: 0x%08X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
+    mosError("This si a hack to get NTK to launch");
+    debug_break();
+}
+
+
 
 /**
  * Go from m68k emulation into host native code.
@@ -1436,6 +1472,9 @@ void mosSetupTrapTable()
     createGlue(0xA9A4, trapHomeResFile);
     createGlue(0xA9A6, trapGetResAttrs);
     createGlue(0xA9A7, trapSetResAttrs);
+
+    // For NTK: startup code chack if this is implemented
+    createGlue(0xA80B, trapPopUpMenuSelect);
 
     mosSetupGestaltTraps();
     mosSetupQuickDrawTraps();

@@ -65,6 +65,8 @@ mosHandle mosNewHandle(unsigned int size);
 void mosDisposeHandle(mosHandle);
 mosHandle mosRecoverHandle(mosPtr);
 int mosSetHandleSize(mosHandle, unsigned int);
+mosPtr mosHLock(mosHandle h);
+void mosHUnlock(mosHandle h);
 
 unsigned int mosCheckBounds(mosPtr, unsigned int size);
 

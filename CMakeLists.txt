@@ -22,6 +22,7 @@ set(
     fileio.cpp fileio.h
     resourcefork.cpp resourcefork.h
     cpu.cpp cpu.h
+    debug.cpp debug.h
     traps.cpp traps.h
     filename.cpp filename.h
     systemram.cpp systemram.h

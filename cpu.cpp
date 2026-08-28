@@ -34,6 +34,7 @@
 #include "resourcefork.h"
 #include "breakpoints.h"
 #include "traps.h"
+#include "debug.h"
 
 // Inlcude Musahi's m68k emulator
 
@@ -62,6 +63,51 @@ void m68k_instruction_hook()
         mosPtr pc = m68k_get_reg(0L, M68K_REG_PC);
         uint16_t instr = m68k_read_memory_16(pc);
 
+        static bool trace = false;
+        if (trace) {
+            mosDebugPrintCPUState(1, 2, 4);
+        }
+
+
+        // 0x002B60DC
+        // 1e, 1f, 20, 21, 22, 23, 12, 15, 14, 16, 18, 9
+        // 4 == 605 (sge d0
+        // 1b must be 0?
+        static uint8_t xxx = 0x00;
+        uint8_t yyy = m68k_read_memory_8(0x002B60DE);
+        if (xxx != yyy) {
+            mosDebug("0x002B60DE from 0x%02X to 0x%02X\n", xxx, yyy);
+            mosDebug("0x%08X %s\n", pc, printAddr(pc));
+            xxx = yyy;
+        }
+        if (pc == 0x003F12D4) {
+            printf("A2=0x%08X\n", m68k_get_reg(0L, M68K_REG_A2));
+            printf("A2+0x23=0x%08X\n", m68k_get_reg(0L, M68K_REG_A2)+0x23);
+        }
+
+        // 0x003F1294 = 078.000170: and.b   ($14,A2), D3   clears D3
+        // 0x002CD33E 001.002EB6 move.b  D0, ($14,A2)      sets A2+14
+
+        // 0x003F12B4 078.000170: and.b   ($14,A2), D3
+        // -> trace 0x002CD328 1.00002EA0 to 0x002CD334 1.00002EAC
+        if (pc == codeOffsetToAddr(1, 0x002EA0)) { //0x002CD328) {
+            trace = true;
+        }
+        if (pc == codeOffsetToAddr(1, 0x002EAC)) {
+            trace = false;
+        }
+
+        // Find the "hardware not supported" bug
+        // D3 = 0: 078.00170  (a2+14)
+        // 0x003F12EA        078.001C6
+        // if ((pc >= 0x003F1282) && (pc <= 0x003F12EA)) {
+        //     mosDebugPrintCPUState(1, 2, 4);
+        // }
+        // Fix the "hardware not supported" dialog (but not the bug!)
+        // if (pc == 0x003F12EA) { // 078.001C6
+        //     //m68k_set_reg(M68K_REG_D0, 1);
+        // }
+
 #if 0 // leaving this code in here if I need to trace the stack again
         static bool trace = false;
         static unsigned int trace_sp = 0;
@@ -84,7 +130,7 @@ void m68k_instruction_hook()
             char buf[255];
             m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
             mosDebug("sp: 0x%08x -> ", m68k_get_reg(0L, M68K_REG_SP));
-            mosDebug("0x%s: %s\n", printAddr(pc), buf);
+            mosDebug("%s: %s\n", printAddr(pc), buf);
         }
 #endif
 

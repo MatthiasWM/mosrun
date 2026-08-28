@@ -57,36 +57,48 @@ void trapGestalt(unsigned short )
     short err = 0; // noErr
 
     switch (selector) {
-        case 'sysv': // gestaltSystemVersion
-            response = 0x0766; // 7.6.6, matching this simulator's target OS version
-            break;
-        case 'qd  ': // gestaltQuickdrawVersion
-            response = 0x0218; // gestalt32BitQD13, plausible for the System 7.6.6 era
-            break;
-        case 'os  ': // gestaltOSAttr
-            response = 0; // no special attributes claimed
-            break;
-        case 'evnt': // gestaltAppleEventsAttr
-            response = 1<<0; // gestaltAppleEventsPresent
-            break;
-        case 'proc': // gestaltProcessorType
-            response = 3; // gestalt68020, matches main.cpp's M68K_CPU_TYPE_68020
-            break;
-        case 'fpu ': // gestaltFPUType
-            response = 0; // gestaltNoFPU -- mosrun has no FPU emulation; steer apps away from FPU code paths
-            break;
-        case 'sysa': // gestaltSysArchitecture
-            response = 1; // gestalt68k -- honest, since we're running the 68k side of this fat binary
-            break;
+        // values taken from BasiliskII run:
+        case 'os  ': response = 0x0000efff; break; // gestaltOSAttr
+        case 'proc': response = 0x00000003; break; // gestaltProcessorType: gestalt68020
+        case 'fpu ': response = 0x00000000; break;
+        case 'vers': response = 0x00000006; break;
+        case 'mach': response = 0x0000000b; break;
+        case 'sysv': response = 0x00000755; break; // gestaltSystemVersion
+        case 'qd  ': response = 0x00000230; break; // gestaltQuickdrawVersion
+        case 'kbd ': response = 0x00000009; break;
+        case 'atlk': response = 0x00000000; break;
+        case 'hdwr': response = 0x0108489d; break;
+        case 'scri': response = 0x00000750; break;
+        case 'te  ': response = 0x00000005; break;
+        case 'evnt': response = 0x00000003; break; // gestaltAppleEventsAttr
+        case 'edtn': response = 0x00000003; break;
+        case 'help': response = 0x80000001; break;
+        case 'alis': response = 0x00000007; break;
+        case 'fold': response = 0x00000001; break;
+        case 'pop!': response = 0x00000001; break;
+        case 'font': response = 0x00000007; break;
+        case 'drag': response = 0x8000000b; break;
+        case 'thds': response = 0x0000001b; break;
+        case 'xlat': response = 0x0000001b; break;
+        case 'stdf': response = 0x00000017; break;
+        case 'qtim': response = 0x02108000; break;
+        case 'tsmv': response = 0x00000001; break;
+        case 'sysa': response = 0x00000001; break; // gestaltSysArchitecture
+
         default:
             mosDebug("Gestalt: unknown selector '%c%c%c%c' (0x%08X), reporting gestaltUndefSelectorErr\n",
                      selector>>24, selector>>16, selector>>8, selector, selector);
-            //printPCHistory();
+        // Known usupported selectors:
+        case 'a/ux':
+        case 'oceu':
+        case 'grfx':
+        case 'pmgr':
+        case 'cfrg':
+        case 'ttsc':
             err = -5551; // gestaltUndefSelectorErr
             response = 0;
             break;
     }
-
     if (responsePtr) m68k_write_memory_32(responsePtr, response);
     m68k_set_reg(M68K_REG_D0, (unsigned int)(short)err);
 }
@@ -96,3 +108,4 @@ void mosSetupGestaltTraps()
 {
     createGlue(0xA1AD, trapGestalt);
 }
+

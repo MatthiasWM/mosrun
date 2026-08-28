@@ -34,7 +34,7 @@ extern "C" {
     #include "musashi331/m68kops.h"
 }
 
-std::vector<CodeSegmentInfo> gCodeSegments;
+std::map<int, CodeSegmentInfo> gCodeSegments;
 mosPtr gMosA5WorldStart = 0;
 mosPtr gMosA5WorldEnd = 0;
 
@@ -45,17 +45,29 @@ mosPtr gMosA5WorldEnd = 0;
  */
 static void recordCodeSegment(int id, mosPtr start, mosPtr end)
 {
-    for (auto &seg : gCodeSegments) {
-        if (seg.id==id) {
-            seg.start = start;
-            seg.end = end;
-            return;
-        }
+    auto it = gCodeSegments.find(id);
+    if (it != gCodeSegments.end()) {
+        it->second.start = start;
+        it->second.end = end;
+        return;
     }
     printf("recordCodeSegment: adding new segment %d from 0x%08X to 0x%08X\n", id, start, end);
-    gCodeSegments.emplace_back(id, start, end);
+    // Add a new code segment
+    gCodeSegments.emplace(std::pair<int, CodeSegmentInfo>{id, CodeSegmentInfo{id, start, end}});
 }
 
+
+/**
+ * Convert a CODE index and offset into a host address.
+ */
+uint32_t codeOffsetToAddr(uint16_t code, uint32_t offset)
+{
+    auto it = gCodeSegments.find(code);
+    if (it != gCodeSegments.end()) {
+        return it->second.start + offset;
+    }
+    return 0xbadcafe1;
+}
 
 /**
  * Convert a host address into segment number plus segment offset.
@@ -70,21 +82,22 @@ const char *printAddr(unsigned int addr)
     char *dst = buf[currBuf];
 
     for (const auto &seg : gCodeSegments) {
-        if (addr>=seg.start && addr<seg.end) {
-            snprintf(dst, 31, "%02d.%05X", seg.id, addr-seg.start);
+        if (addr>=seg.second.start && addr<seg.second.end) {
+            snprintf(dst, 31, "%03d.%06X", seg.first, addr-seg.second.start);
             return dst;
         }
     }
     if (gMosA5WorldStart!=gMosA5WorldEnd && addr>=gMosA5WorldStart && addr<gMosA5WorldEnd) {
-        snprintf(dst, 31, "(A5).%05X", addr-gMosA5WorldStart);
+        snprintf(dst, 31, "A5!.%06X", addr-gMosA5WorldStart);
         return dst;
     }
-    snprintf(dst, 31, "(ERR).%08X", addr);
+    snprintf(dst, 31, "ERR.%06X", addr);
     return dst;
 }
 
 void printPCHistory()
 {
+#if 0
     mosTrace("PC history:\n");
     mosDebug("   pc: 0x%08X (%s)\n", m68k_get_reg(0L, M68K_REG_PC), printAddr(m68k_get_reg(0L, M68K_REG_PC)));
     for (int i=0; i<M68K_PC_HISTORY_SIZE; i++) {
@@ -92,6 +105,20 @@ void printPCHistory()
         if (pc==0) break;
         mosDebug("  %3d: 0x%08X (%s)\n", i, pc, printAddr(pc));
     }
+#else
+    mosTrace("PC history:\n");
+    char buf[255];
+    unsigned int pc = 0;
+    for (int i=0; i<M68K_PC_HISTORY_SIZE; i++) {
+        pc = m68k_get_pc_history(M68K_PC_HISTORY_SIZE-i-1);
+        if (pc==0) continue;
+        m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+        mosDebug("  %4d: 0x%08X %16s %s\n", M68K_PC_HISTORY_SIZE-i, pc, printAddr(pc), buf);
+    }
+    pc = m68k_get_reg(0L, M68K_REG_PC);
+    m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+    mosDebug("  %4d: 0x%08X %16s %s\n", 0, pc, printAddr(pc), buf);
+#endif
 }
 
 

@@ -26,7 +26,7 @@
 
 #include "main.h"
 
-#include <vector>
+#include <map>
 
 
 /**
@@ -42,7 +42,7 @@ public:
     mosPtr end;
 };
 
-extern std::vector<CodeSegmentInfo> gCodeSegments;
+extern std::map<int, CodeSegmentInfo> gCodeSegments;
 
 // The A5 world (below-A5 globals, jump table, above-A5 globals), as one
 // contiguous span, set up by createA5World(). Used by trapLoadSeg (traps.cpp)
@@ -60,6 +60,7 @@ unsigned int createA5World(mosHandle hCode0);
 void readResourceMap();
 const char *printAddr(unsigned int addr);
 void printPCHistory();
+uint32_t codeOffsetToAddr(uint16_t code, uint32_t offset);
 
 
 #endif /* defined(__mosrun__resourcefork__) */

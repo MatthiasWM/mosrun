@@ -47,7 +47,7 @@ unsigned int gMosResLoad = 1;
 unsigned int gMosSegHiEnable = 0;
 unsigned int gMosResErr = 0;
 unsigned int gMosMPWHandle = 0;
-unsigned int gMosHWCfgFlags = 0;
+unsigned int gMosHWCfgFlags = 0xec00; // Basilisk test
 
 
 
@@ -106,7 +106,6 @@ unsigned int m68k_read_memory_8(unsigned int address)
             mosDebug("Reading unsupported RAM.b address 0x%08X from pc=0x%08X (CODE %s)\n",
                 address, m68k_get_reg(0L, M68K_REG_PC),
                 printAddr(m68k_get_reg(0L, M68K_REG_PC)));
-            printPCHistory();
             break;
     }
     return 0;
@@ -142,7 +141,6 @@ unsigned int m68k_read_memory_16(unsigned int address)
                 address, m68k_get_reg(0L, M68K_REG_PC),
                 printAddr(m68k_get_reg(0L, M68K_REG_PC))
             );
-            printPCHistory();
             break;
     }
     return 0;
@@ -184,7 +182,6 @@ unsigned int m68k_read_memory_32(unsigned int address)
             mosDebug("Reading unsupported RAM.l address 0x%08X from pc=0x%08X (CODE %s)\n",
                 address, m68k_get_reg(0L, M68K_REG_PC),
                 printAddr(m68k_get_reg(0L, M68K_REG_PC)));
-            printPCHistory();
             break;
     }
     return 0;

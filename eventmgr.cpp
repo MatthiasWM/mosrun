@@ -42,8 +42,8 @@ extern "C" {
  */
 void trapFlushEvents(unsigned short )
 {
-    /*unsigned int stopMask  =*/ m68k_get_reg(0L, M68K_REG_D0) >> 16; // high word
-    /*unsigned int whichMask =*/ m68k_get_reg(0L, M68K_REG_D0) & 0xFFFF; // low word
+    // unsigned int stopMask  = m68k_get_reg(0L, M68K_REG_D0) >> 16; // high word
+    // unsigned int whichMask = m68k_get_reg(0L, M68K_REG_D0) & 0xFFFF; // low word
 }
 
 

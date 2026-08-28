@@ -835,6 +835,7 @@ Traps trapLUT[] = {
     { 0xAA65, "_SetMCEntries" },
     { 0xAA66, "_MenuChoice" },
     { 0xAA68, "_DialogDispatch" },
+    { 0xAA6E, "???" },
     { 0xAA90, "_InitPalettes" },
     { 0xAA91, "_NewPalette" },
     { 0xAA92, "_GetNewPalette" },

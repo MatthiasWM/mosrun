@@ -465,6 +465,20 @@ void mosDisposeHandle(mosHandle hdl)
     mosFree(hdl);
 }
 
+/**
+ * Get the pointer from the handle (locking is not implemented)
+ */
+mosPtr mosHLock(mosHandle hdl) {
+    return mosRead32(hdl);
+}
+
+/**
+ * Unlock thae handle after use
+ */
+void mosHUnlock(mosHandle hdl) {
+    (void)hdl;
+}
+
 
 /**
  Return the handle that points to a relocatable block of memory.
