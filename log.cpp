@@ -35,7 +35,7 @@ extern "C" {
 
 
 static FILE *gMosLogFile = stderr;
-static int gMosVerbosity = MOS_VERBOSITY_DEBUG;
+static int gMosVerbosity = MOS_VERBOSITY_TRACE;
 
 
 void mosLogVerbosity(int v)

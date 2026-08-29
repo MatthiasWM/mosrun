@@ -34,6 +34,8 @@ bool mosCheckMemoryCoherence();
 void *mosToHost(mosPtr);
 mosPtr hostToMos(void*);
 
+bool mosCheckMemoryAccess(mosPtr address, uint32_t size, bool verbose = true);
+
 void mosMemcpy(mosPtr dst, mosPtr src, uint32_t n);
 void mosMemcpy(void *dst, mosPtr src, uint32_t n);
 void mosMemcpy(mosPtr dst, const void *src, uint32_t n);

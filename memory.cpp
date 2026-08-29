@@ -27,6 +27,7 @@
 
 #include "memory.h"
 #include "log.h"
+#include "debug.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -46,6 +47,16 @@ byte *MosMem;
  */
 void *mosToHost(mosPtr mp)
 {
+    static bool handling_error = false;
+    if (handling_error) {
+        return MosMem; // Ouch!
+    }
+    if (mp >= kMosMemMax) {
+        handling_error = true;
+        mosDebugPrintPCHistory();
+        fprintf(stderr, "mosToHost: pointer out of bounds: 0x%08X\n", mp);
+        debug_break();
+    }
     assert(mp>=0);
     assert(mp<kMosMemMax);
     return (void*)(MosMem+mp);
@@ -250,13 +261,17 @@ void mosFree(mosPtr addr)
  \return true, if access is allowed for the entire range
  \return false, if access is invalid, and if the flags are set, output a diagnostic message
  */
-bool mosCheckMemoryAccess(mosPtr address, uint32_t size)
+bool mosCheckMemoryAccess(mosPtr address, uint32_t size, bool verbose)
 {
     mosPtr first = address, last = address+size-1;
     mosPtr b = mosMemBlockStart;
     if (first<b || last>=kMosMemMax) {
-        mosWarning("mosCheckMemoryAccess: address range 0x%08X to 0x%08X not within managed RAM.\n"
-                   "  Legal memory range is 0x%08X to 0x%08X\n", mosMemBlockStart, kMosMemMax-1);
+        if (verbose) {
+            mosWarning("mosCheckMemoryAccess: address range 0x%08X to 0x%08X not within managed RAM.\n"
+                       "  Legal memory range is 0x%08X to 0x%08X\n",
+                       first, last,
+                       mosMemBlockStart, kMosMemMax-1);
+        }
         return false;
     }
     for (;;) {
@@ -271,17 +286,21 @@ bool mosCheckMemoryAccess(mosPtr address, uint32_t size)
             }
         }
         if (next==0) {
-            mosWarning("mosCheckMemoryAccess: memory allocation for address range 0x%08X to 0x%08X not found.\n", first, last);
+            if (verbose) {
+                mosWarning("mosCheckMemoryAccess: memory allocation for address range 0x%08X to 0x%08X not found.\n", first, last);
+            }
             return false;
         }
         if (next>first) {
             uint32_t bSize = mosReadUnsafe32(b+mosMemBlockSize);
             uint32_t nSize = mosReadUnsafe32(next+mosMemBlockSize);
-            mosWarning("mosCheckMemoryAccess: memory allocation for address range 0x%08X to 0x%08X not found.\n"
-                       "  Closest allocations are 0x%08X to 0x%08X and 0x%08X to 0x%08X\n",
-                       first, last,
-                       b+mosSizeofMemBlock, b+mosSizeofMemBlock+bSize-1,
-                       next+mosSizeofMemBlock, next+mosSizeofMemBlock+nSize-1);
+            if (verbose) {
+                mosWarning("mosCheckMemoryAccess: memory allocation for address range 0x%08X to 0x%08X not found.\n"
+                           "  Closest allocations are 0x%08X to 0x%08X and 0x%08X to 0x%08X\n",
+                            first, last,
+                            b+mosSizeofMemBlock, b+mosSizeofMemBlock+bSize-1,
+                            next+mosSizeofMemBlock, next+mosSizeofMemBlock+nSize-1);
+            }
             if (next>first)
             return false;
         }

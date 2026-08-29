@@ -27,6 +27,7 @@
 #include "resourcefork.h"
 #include "memory.h"
 #include "debug.h"
+#include "progress.h"
 
 extern "C" {
 #include "musashi331/m68k.h"
@@ -94,7 +95,7 @@ void trapAlert(unsigned short )
     /*unsigned int filterProc =*/ m68k_read_memory_32(sp); sp += 4;
     unsigned int alertID     = m68k_read_memory_16(sp); sp += 2;
 
-    mosDebugPrintPCHistory();
+    // mosDebugPrintPCHistory();
 
     bool found = false;
     mosHandle hAlrt = GetResource('ALRT', alertID);
@@ -117,6 +118,7 @@ void trapAlert(unsigned short )
                         buf[t] = c;
                     }
                     mosError("Alert(%d): %s\n", (short)alertID, buf.c_str());
+                    mosProgressReport();
                     found = true;
                 }
                 src += 14 + length;
@@ -128,56 +130,6 @@ void trapAlert(unsigned short )
         mosWarning("Alert(%d) -- no static text found in dialog\n", (short)alertID);
     }
 
-        // 0x02.w = 'vers'
-        // 0x04.w = 'sysv' , test bit 0x600
-        // 0x06.w = 0x00079386
-        // 0x08.b =0x00079388
-        // 0x0e = 'te  '
-        // 0x12 -> jsr 0x00001368 -> 0x14
-        // 0x14 , 0xA80B, jsr 0x00001368  ... _PopUpMenuSelect
-        // 0x15 - 'scri'
-        // 0x17 , 0xA803, jsr 0x00001368  ... _SndDoCommand
-        // 0x18 , 0xA860, jsr 0x00001368  ... _WaitNextEvent
-        // 0x19 = bit 7 in hdwr
-        // 0x1b = a/ux
-        // 0x1c = bit 4 in 'os  '
-        // 0x1a = 0x400 bit in HWCfgFlags
-        // 0x1e = bit 0 of evnt
-        // 0x1f = bit 0 of edtn
-        // 0x20 = bit 0 of help
-        // 0x21 = bit 0 of alis
-        // 0x22 = bit 0 of fold
-        // 0x23 = [0x00079382] , bit 3 of 'os  ', *must* be set
-        // 0x24 = bit 0 of pop!
-        // 0x25 = bit 0 of font
-        // 0x26 = [0x00079383] , ProcessInfoRec: [A7 + 0x26].b, bit 2
-        // 0x27 = [0x00079384] , ProcessInfoRec: [A7 + 0x24].l mut not be 0
-        // 0x28 = bit 0 of drag
-        // 0x29 = bit 0 of thds
-        // 0x2a = bit 0 of oceu
-        // 0x2b = bit 0 of grfx
-        // 0x2c = bit 0 of pmgr
-        // 0x2d = always 0
-        // 0x2e = bit 0 of cfrg
-        // 0x2f = bit 0 of xlat
-        // 0x30 = bit 0 of ttsc
-        // 0x31 = bit 0 of stdf
-        // 0x32 = qtim
-        // 0x33 = tsmv
-
-        // These bits are tested:
-        // 12, 15, 14, 16, 18, 4>605, 9, 4>700, 1e, 1f, 20, 21, 22, 23, 1b==0
-        //  1   1   0   1   1         1          0   0   0   0   0   1   1
-
-        // 0x002B60DC
-        // 1e, 1f, 20, 21, 22, 23,   12, 15, 14, 16, 18, 9
-        // 4 == 605 (sge d0
-        // 1b must be 0?
-    for (int i = 0; i < 0x40; i++) {
-        uint8_t d = m68k_read_memory_8(0x002B60DC + i);
-        mosDebug("0x002B60DC + 0x%02X = 0x%02X\n", i, d);
-    }
-
     m68k_write_memory_16(sp, 1); // itemHit = 1 (default/OK), placeholder
 
     sp -= 4; m68k_write_memory_32(sp, ret);
@@ -186,9 +138,40 @@ void trapAlert(unsigned short )
     m68k_set_reg(M68K_REG_D0, 1);
 }
 
+/**
+ * Substitutes text strings in the static text items of your alert or dialog boxes.
+ * \code
+ * PROCEDURE ParamText(param0: Str255; param1: Str255;
+ *                     param2: Str255; param3: Str255);
+ * \endcode
+ * \param[in] 4 string references on the stack
+ * \return void
+ */
+void trapParamText(unsigned short /*instr*/)
+{
+    mosPtr sp = m68k_get_reg(0L, M68K_REG_SP);
+    mosPtr ret = m68k_read_memory_32(sp); sp += 4;
+    mosPtr str0 = m68k_read_memory_32(sp); sp += 4;
+    mosPtr str1 = m68k_read_memory_32(sp); sp += 4;
+    mosPtr str2 = m68k_read_memory_32(sp); sp += 4;
+    mosPtr str3 = m68k_read_memory_32(sp); sp += 4;
+
+    mosDebug("str0: \"%s\"\n", mosStr255ToStr(str0).c_str());
+    mosDebug("str1: \"%s\"\n", mosStr255ToStr(str1).c_str());
+    mosDebug("str2: \"%s\"\n", mosStr255ToStr(str2).c_str());
+    mosDebug("str3: \"%s\"\n", mosStr255ToStr(str3).c_str());
+
+    mosDebugPrintPCHistory();
+    mosDebugPrintCPUState(1, 2, 22);
+
+    sp -= 4; m68k_write_memory_32(sp, ret);
+    m68k_set_reg(M68K_REG_SP, sp);
+}
+
 
 void mosSetupDialogMgrTraps()
 {
     createGlue(0xA97B, trapInitDialogs);
     createGlue(0xA985, trapAlert);
+    createGlue(0xA98B, trapParamText);
 }

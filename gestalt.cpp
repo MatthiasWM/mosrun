@@ -52,6 +52,7 @@ void trapGestalt(unsigned short )
 {
     unsigned int responsePtr = m68k_get_reg(0L, M68K_REG_A1); // VAR response: LongInt
     unsigned int selector    = m68k_get_reg(0L, M68K_REG_D0); // OSType selector
+    (void)responsePtr;
 
     unsigned int response = 0;
     short err = 0; // noErr
@@ -99,7 +100,12 @@ void trapGestalt(unsigned short )
             response = 0;
             break;
     }
-    if (responsePtr) m68k_write_memory_32(responsePtr, response);
+
+    // mosDebug("Gestalt: selector '%c%c%c%c' (0x%08X) = 0x%08x, (err=%d)\n",
+    //     selector>>24, selector>>16, selector>>8, selector, selector, response, err);
+
+    // if (responsePtr) m68k_write_memory_32(responsePtr, response);
+    m68k_set_reg(M68K_REG_A0, response);
     m68k_set_reg(M68K_REG_D0, (unsigned int)(short)err);
 }
 

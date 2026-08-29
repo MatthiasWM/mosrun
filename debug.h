@@ -30,6 +30,7 @@
 void mosDebugPrintCPUState(int cpu=1, int registers=0, int stack=0);
 void mosDebugPrintPCHistory();
 
+std::string mosStr255ToStr(mosPtr str255);
 std::string mosDebugAddrToCodeOffsetStr(uint32_t addr);
 
 #endif /* defined(__mosrun__debug__) */

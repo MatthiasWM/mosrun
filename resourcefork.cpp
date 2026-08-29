@@ -184,6 +184,9 @@ void dumpResourceMap()
 
 
 /**
+ * pascal Handle GetResource    (ResType theType, short theID);
+ * pascal Handle Get1Resource   (ResType theType, short theID);
+ *
  * Finds and loads the given resource, and returns a handle to it
  * Resource Data in Memory:
  * Master pointer: 4 bytes

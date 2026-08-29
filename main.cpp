@@ -87,7 +87,8 @@
 //    SetFile         ok native OS X tool
 //
 
-
+// NTK progress:
+// AUG/29/26 - 17:51 :   5'542'812 instructions executed, 185 trap calls dispatched
 
 // Inlcude all the required system headers
 

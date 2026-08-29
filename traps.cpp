@@ -19,6 +19,26 @@
  The latest source code can be found at https://github.com/MatthiasWM/mosrun
  */
 
+// OS Trap Table: Contains 00E0 (224 decimal) entries starting at low-memory
+// base $00000400. (Opcodes range from $A000 to $A0DF).
+// Toolbox Trap Table: Contains 0200 (512 decimal) entries starting at
+// low-memory base $00000E00. (Opcodes range from $A800 to $A9FF and beyond up to $AFFP).
+
+// 1010.1zyx.xxxx.xxxx: Toolbox: x = trap #, if z is 1, pop the extra return address from the stack
+// z=1 adds an extra return address between the return address and the parameters on the stack.
+// Setting the auto-pop bit tells the dispatcher to strip that 4-byte return address before jumping into the real routine.
+// x.xxxx.xxx = 512 (0x200) possible entries. y was later added, resulting in 1024 (0x400)possible entries.
+// This is tested by checking if 0xAA6E and 0xA86E (InitGraf) point to the same address (0x200)
+// or different addresses (0x400) (GetTrapAddress vs. NGetTrapAddress)
+// Pascal calling convention: args pushed left-to-right, callee pops everything
+// including its own return address before resuming)
+
+// 1010.0yyz.xxxx.xxxx: OS trap: x = trap #, yy are extra flags that can be used by the traps
+// If z is set, A0 returns a value, otherwise A0 will be preserved.
+// OS traps arguments are stored in A0 and D0, or pointer to by A0 if more than two arguments are needed.
+// Data is returned in D0 (result code), and optionally in A0 (result data) as well.
+// xxxx.xxxx = 256 possible entries
+
 // TODO: missing traps:
 //    UInt32 CmpStringMarks(BytePtr textPtrA, BytePtr textPtrB, UInt32 lengthAB) ??
 //    int CountResources(theType: ResType) Given the type, return the number of resources of that type accessable in ALL open maps.
@@ -55,6 +75,7 @@
 #include "resourcefork.h"
 #include "breakpoints.h"
 #include "systemram.h"
+#include "debug.h"
 #include "fileio.h"
 #include "gestalt.h"
 #include "quickdraw.h"
@@ -132,25 +153,6 @@ void hexDump(mosPtr a, unsigned int n)
 // every entry in this array points to an m68k code segment ("glue") that calls a native function in host memory
 mosPtr gToolboxTrapTable = 0;
 mosPtr gOSTrapTable = 0;
-// OS Trap Table: Contains 00E0 (224 decimal) entries starting at low-memory
-// base $00000400. (Opcodes range from $A000 to $A0DF).
-// Toolbox Trap Table: Contains 0200 (512 decimal) entries starting at
-// low-memory base $00000E00. (Opcodes range from $A800 to $A9FF and beyond up to $AFFP).
-
-// 1010.1zyx.xxxx.xxxx: Toolbox: x = trap #, if z is 1, pop the extra return address from the stack
-// z=1 adds an extra return address between the return address and the parameters on the stack.
-// Setting the auto-pop bit tells the dispatcher to strip that 4-byte return address before jumping into the real routine.
-// x.xxxx.xxx = 512 (0x200) possible entries. y was later added, resulting in 1024 (0x400)possible entries.
-// This is tested by checking if 0xAA6E and 0xA86E (InitGraf) point to the same address (0x200)
-// or different addresses (0x400) (GetTrapAddress vs. NGetTrapAddress)
-// Pascal calling convention: args pushed left-to-right, callee pops everything
-// including its own return address before resuming)
-
-// 1010.0yyz.xxxx.xxxx: OS trap: x = trap #, yy are extra flags that can be used by the traps
-// If z is set, A0 returns a value, otherwise A0 will be preserved.
-// OS traps arguments are stored in A0 and D0, or pointer to by A0 if more than two arguments are needed.
-// Data is returned in D0 (result code), and optionally in A0 (result data) as well.
-// xxxx.xxxx = 256 possible entries
 
 /**
  * Load a resource using a fourCC code.
@@ -554,10 +556,22 @@ void trapHGetState(unsigned short ) {
     m68k_set_reg(M68K_REG_D0, 0x80); // locked memory // TODO: may need more flags!
 }
 
+/**
+ * Restores a block's state byte previously saved by calling HGetState.
+ *
+ * \code
+ * procedure HSetState(h: Handle; flags: SignedByte);
+ * \endcode
+ */
+void trapHSetState(unsigned short ) {
+    // nothing to do here
+}
 
 /**
  * Move handles high in memory to make room for big allocations.
- *
+ * /code
+ * void MoveHHi(Handle h);
+ * \endcode
  * There is no benefit to moving handles high in memory in this simulation.
  */
 void trapMoveHHi(unsigned short ) {
@@ -662,6 +676,7 @@ void trapOSDispatch(unsigned short )
         }
         case 0x3A: { // OSErr GetProcessInformation(PSN: ProcessSerialNumber,
                      //                             VAR info: ProcessInfoRec);
+            // 0x26 -> 0x1a, 26
             // TYPE ProcessInfoRec =
             // RECORD
             //     processInfoLength:   LongInt;       {0: length of process info record (56)}
@@ -680,6 +695,32 @@ void trapOSDispatch(unsigned short )
             //     processActiveTime:   LongInt;       {48: accumulated CPU time}
             //     processAppSpec:      FSSpecPtr;     {52: location of the file}
             // END;
+            // struct ProcessInfoRec {
+            //     unsigned long        processInfoLength;   /* 0: 0000003c length of record*/
+            //     StringPtr            processName;         /* 4: 00000000 name of process*/
+            //     ProcessSerialNumber  processNumber;       /* 8: 00000000 00002002 psn of the process*/
+            //        hi, lo
+            //     unsigned long        processType;         /* 16: 41 50 50 4c file type of app file*/
+            //     OSType               processSignature;    /* 20: 3f 3f 3f 3f signature of app file*/
+            //     unsigned long        processMode;         /* 24: 00 00 58 80 'SIZE' resource flags*/
+            //     Ptr                  processLocation;     /* 28: 03 f4 3e 94 address of partition*/
+            //     unsigned long        processSize;         /* 32: 00 01 d0 00 partition size*/
+            //     unsigned long        processFreeMem;      /* 36: 00 00 b0 dc free bytes in heap*/
+            //     ProcessSerialNumber  processLauncher;     /* 40: 00000000 00002000 proc that launched this */
+            //                                                 /* one*/
+            //     unsigned long        processLaunchDate;   /* 48: 0000111f time when launched*/
+            //     unsigned long        processActiveTime;   /* 52: 00000000 accumulated CPU time*/
+            //     FSSpecPtr            processAppSpec;      /* 56: 00000000 location of the file*/
+            // };
+            // ProcessName and ProcessAppSpec are set to 0 if we don;t need them
+            // 00 00 00 3c 00 00 00 00
+            // 00 00 00 00 00 00 20 02
+            // 41 50 50 4c 3f 3f 3f 3f
+            // 00 00 58 80 03 f4 3e 94
+            // 00 01 d0 00 00 00 b0 dc
+            // 00 00 00 00 00 00 20 00
+            // 00 00 11 1f 00 00 00 00
+            // 00 00 00 00 30 30 20 30
             // process mode flags:
             // modeDeskAccessory             = $00020000;
             // modeMultiLaunch               = $00010000;
@@ -699,10 +740,41 @@ void trapOSDispatch(unsigned short )
             unsigned int infoPtr = m68k_read_memory_32(sp); sp += 4;
             /*unsigned int psnPtr =*/ m68k_read_memory_32(sp); sp += 4;
 
-            // Minimal, safe stub: report success without filling in any
-            // individual ProcessInfoRec fields beyond what the caller
-            // already zeroed itself.
-            (void)infoPtr;
+            mosPtr d = infoPtr;
+
+            // struct ProcessInfoRec {
+            //     unsigned long        processInfoLength;   /* 0: 0000003c length of record*/
+            m68k_write_memory_32(d, 0x0000003c); d+=4;
+            //     StringPtr            processName;         /* 4: 00000000 name of process*/
+            m68k_write_memory_32(d, 0x00000000); d+=4;
+            //     ProcessSerialNumber  processNumber;       /* 8: 00000000 00002002 psn of the process*/
+            m68k_write_memory_32(d, 0x00000000); d+=4;
+            m68k_write_memory_32(d, 0x00002002); d+=4;
+            //     unsigned long        processType;         /* 16: 41 50 50 4c file type of app file*/
+            m68k_write_memory_32(d, 'APPL'); d+=4;
+            //     OSType               processSignature;    /* 20: 3f 3f 3f 3f signature of app file*/
+            m68k_write_memory_32(d, 0x3f3f3f3f); d+=4;      // '????'
+            //     unsigned long        processMode;         /* 24: 00 00 58 80 'SIZE' resource flags*/
+            m68k_write_memory_32(d, 0x00005880); d+=4;
+            //     Ptr                  processLocation;     /* 28: 03 f4 3e 94 address of partition*/
+            m68k_write_memory_32(d, 0x03f43e94); d+=4;
+            //     unsigned long        processSize;         /* 32: 00 01 d0 00 partition size*/
+            m68k_write_memory_32(d, 0x0001d000); d+=4;
+            //     unsigned long        processFreeMem;      /* 36: 00 00 b0 dc free bytes in heap*/
+            unsigned int total, contig;
+            mosFreeMemInfo(&total, &contig);
+            m68k_write_memory_32(d, total); d+=4;
+            //     ProcessSerialNumber  processLauncher;     /* 40: 00000000 00002000 proc that launched this one*/
+            m68k_write_memory_32(d, 0x00002000); d+=4;
+            m68k_write_memory_32(d, 0x0000003c); d+=4;
+            //     unsigned long        processLaunchDate;   /* 48: 0000111f time when launched*/
+            m68k_write_memory_32(d, 0x0000111f); d+=4;
+            //     unsigned long        processActiveTime;   /* 52: 00000000 accumulated CPU time*/
+            m68k_write_memory_32(d, 0x00000000); d+=4;
+            //     FSSpecPtr            processAppSpec;      /* 56: 00000000 location of the file*/
+            m68k_write_memory_32(d, 0x00000000); d+=4;
+            // };
+
             m68k_write_memory_16(sp, 0); // noErr
             break;
         }
@@ -1174,6 +1246,7 @@ void trapExitToShell(unsigned short )
     unsigned int mpwHandle = m68k_read_memory_32(0x0316);
     unsigned int mpwMem = m68k_read_memory_32(mpwHandle+4);
     unsigned int resultCode = m68k_read_memory_32(mpwMem+0x000E);
+    mosDebugPrintPCHistory();
     mosDebug("ExitToShell (returns %d)\n", resultCode);
     exit(resultCode);
 }
@@ -1192,6 +1265,8 @@ void trapExitToShell(unsigned short )
  */
 void trapUninmplemented(unsigned short trap)
 {
+    mosDebugPrintPCHistory();
+
     // Give some feedback on a Toolbox trap
     if (mosIsToolboxTrap(trap)) {
         mosError("Unimplemented Toolbox trap %04X, index=%d: %s\n",
@@ -1210,13 +1285,255 @@ void trapUninmplemented(unsigned short trap)
 }
 
 void trapPopUpMenuSelect(unsigned short ) {
-    // FIXME: $a01f; opcode 1010 (_DisposePtr)
-    mosError("Unimplemented trap PopUpMenuSelect: 0x%08X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
-    mosError("This si a hack to get NTK to launch");
+    mosError("Unimplemented trap PopUpMenuSelect: %04X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
+    mosError("This is a hack to get NTK to launch");
     debug_break();
 }
 
+void trapWaitNextEvent(unsigned short ) {
+    mosError("Unimplemented trap WaitNextEvent: %04X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
+    mosError("This is a hack to get NTK to launch");
+    debug_break();
+}
 
+// params
+// selector.w
+// return address.l
+// AECreateList:  INLINE $303C, $0706, $A816;
+// AECountItems:  INLINE $303C, $0407, $A816;
+// AEPutPtr:      INLINE $303C, $0A08, $A816;
+// AEPutDesc:     INLINE $303C, $0609, $A816;
+// AEPutKeyPtr:   INLINE $303C, $0A0F, $A816;
+void trapPack8(unsigned short /* A816 */)
+{
+    uint16_t selector = (uint16_t)m68k_get_reg(0L, M68K_REG_D0);
+    uint16_t words_on_stack = selector >> 8;
+
+    mosPtr sp = m68k_get_reg(0L, M68K_REG_SP);
+    mosPtr ret = m68k_read_memory_32(sp); sp += 4;
+
+    uint32_t osErr = 0;
+    bool found = false;
+    bool handled = false;
+
+    switch (selector) {
+        // OSErr AEGetCoercionHandler(DescType from_type, DescType to_type, AECoerceDescUPP *hdlr_out, int32_t *refcon_out, Boolean *from_type_is_desc_p_out, Boolean system_handler_p)
+        case 0x0B24:
+            break;
+        // OSErr AECreateDesc(DescType type, const void *data, Size data_size, AEDesc *desc_out)
+        case 0x0825:
+            break;
+        // OSErr AEDisposeDesc(AEDesc *desc)
+        case 0x0204:
+            break;
+        // OSErr AECoerceDesc(AEDesc *desc, DescType result_type, AEDesc *desc_out)
+        case 0x0603:
+            break;
+        // OSErr AEGetParamPtr(AERecord *record, AEKeyword keyword, DescType desired_type, DescType *type_out, Ptr data, Size max_size, Size *size_out)
+        case 0x0E11:
+            break;
+        // OSErr AEGetParamDesc(AERecord *record, AEKeyword keyword, DescType desired_type, AEDesc *desc_out)
+        case 0x0812:
+            break;
+        // OSErr AEPutParamPtr(AERecord *record, AEKeyword keyword, DescType type, const void *data, Size data_size)
+        case 0x0A0F:
+            break;
+        // OSErr AEPutParamDesc(AERecord *record, AEKeyword keyword, AEDesc *desc)
+        case 0x0610:
+            break;
+        // OSErr AESizeOfParam(AERecord *record, AEKeyword keyword, DescType *type_out, Size *size_out)
+        case 0x0829:
+            break;
+        // OSErr AESetInteractionAllowed(AEInteractionAllowed level)
+        case 0x011E:
+            break;
+        // OSErr AEResetTimer(AppleEvent *evt)
+        case 0x0219:
+            break;
+        // OSErr AEGetTheCurrentEvent(AppleEvent *return_evt)
+        case 0x021A:
+            break;
+        // OSErr AESetTheCurrentEvent(AppleEvent *evt)
+        case 0x022C:
+            break;
+        // OSErr AESuspendTheCurrentEvent(AppleEvent *evt)
+        case 0x022B:
+            break;
+        // OSErr AEResumeTheCurrentEvent(AppleEvent *evt, AppleEvent *reply, AEEventHandlerUPP dispatcher, int32_t refcon)
+        case 0x0818:
+            break;
+        // OSErr AEGetInteractionAllowed(AEInteractionAllowed *return_level)
+        case 0x021D:
+            break;
+        // OSErr AEDuplicateDesc(AEDesc *src, AEDesc *dst)
+        case 0x0405:
+            break;
+        // OSErr AECountItems(AEDescList *list, int32_t *count_out)
+        case 0x0407:
+            break;
+        // OSErr AEDeleteItem(AEDescList *list, int32_t index)
+        case 0x040E:
+            break;
+        // OSErr AEDeleteParam(AERecord *record, AEKeyword keyword)
+        case 0x0413:
+            break;
+        // OSErr AEInstallSpecialHandler(AEKeyword function_class, AEEventHandlerUPP hdlr, Boolean system_handler_p)
+        case 0x0500:
+            break;
+        // OSErr AERemoveSpecialHandler(AEKeyword function_class, AEEventHandlerUPP hdlr, Boolean system_handler_p)
+        case 0x0501:
+            break;
+        // OSErr AEGetSpecialHandler(AEKeyword function_class, AEEventHandlerUPP *hdlr_out, Boolean system_handler_p)
+        case 0x052D:
+            break;
+        // OSErr AESend(AppleEvent *evt, AppleEvent *reply, AESendMode send_mode, AESendPriority send_priority, int32_t timeout, IdleUPP idle_proc, EventFilterUPP filter_proc)
+        case 0x0D17:
+            break;
+        // OSErr AECoercePtr(DescType data_type, Ptr data, Size data_size, DescType result_type, AEDesc *desc_out)
+        case 0x0A02:
+            break;
+        // OSErr AEGetEventHandler(AEEventClass event_class, AEEventID event_id, AEEventHandlerUPP *hdlr, int32_t *refcon, Boolean system_handler_p)
+        case 0x0921:
+            break;
+        // OSErr AERemoveEventHandler(AEEventClass event_class, AEEventID event_id, AEEventHandlerUPP hdlr, Boolean system_handler_p)
+        case 0x0720:
+            break;
+        // OSErr AEProcessAppleEvent(EventRecord *evt)
+        case 0x021B:
+            break;
+        // OSErr AEPutDesc(AEDescList *list, int32_t index, AEDesc *desc)
+        case 0x0609:
+            break;
+        // OSErr AEPutAttributePtr(AppleEvent *evt, AEKeyword keyword, DescType type, const void *data, Size size)
+        case 0x0A16:
+            break;
+        // OSErr AEPutAttributeDesc(AppleEvent *evt, AEKeyword keyword, AEDesc *desc)
+        case 0x0627:
+            break;
+        // OSErr AEGetNthPtr(AEDescList *list, int32_t index, DescType desired_type, AEKeyword *keyword_out, DescType *type_out, void *data, int32_t max_size, int32_t *size_out)
+        case 0x100A:
+            break;
+        // OSErr AEGetAttributePtr(AppleEvent *evt, AEKeyword keyword, DescType desired_type, DescType *type_out, void *data, Size max_size, Size *size_out)
+        case 0x0E15:
+            break;
+        // OSErr AEGetArray(AEDescList *list, AEArrayType array_type, AEArrayDataPointer array_ptr, Size max_size, DescType *return_item_type, Size *return_item_size, int32_t *return_item_count)
+        case 0x0D0C:
+            break;
+        // OSErr AECreateAppleEvent(AEEventClass event_class, AEEventID event_id, AEAddressDesc *target, int16_t return_id, int32_t transaction_id, AppleEvent *evt)
+        case 0x0B14:
+            break;
+        // OSErr AEInstallCoercionHandler(DescType from_type, DescType to_type, AECoerceDescUPP hdlr, int32_t refcon, Boolean from_type_is_desc_p, Boolean system_handler_p)
+        case 0x0A22:
+            break;
+        // OSErr AEInstallEventHandler(AEEventClass event_class, AEEventID event_id, AEEventHandlerUPP hdlr, int32_t refcon, Boolean system_handler_p)
+        case 0x091F:
+            break;
+        // OSErr AERemoveCoercionHandler(DescType from_type, DescType to_type, AECoerceDescUPP hdlr, Boolean system_handler_p)
+        case 0x0723:
+            break;
+        // OSErr AEPutArray(AEDescList *list, AEArrayType type, AEArrayDataPointer array_data, DescType item_type, Size item_size, int32_t item_count)
+        case 0x0B0D:
+            break;
+        // OSErr AECreateList(Ptr list_elt_prefix, Size list_elt_prefix_size, Boolean is_record_p, AEDescList *list_out)
+        case 0x0706:
+            break;
+        // OSErr AEGetAttributeDesc(AppleEvent *evt, AEKeyword keyword, DescType desired_type, AEDesc *desc_out)
+        case 0x0826:
+            break;
+        // OSErr AESizeOfAttribute(AppleEvent *evt, AEKeyword keyword, DescType *type_out, Size *size_out)
+        case 0x0828:
+            break;
+        // OSErr AEGetNthDesc(AEDescList *list, int32_t index, DescType desired_type, AEKeyword *keyword_out, AEDesc *desc_out)
+        case 0x0A0B:
+            break;
+        // OSErr AESizeOfNthItem(AEDescList *list, int32_t index, DescType *type_out, Size *size_out)
+        case 0x082A:
+            break;
+        // OSErr AEPutPtr(AEDescList *list, int32_t index, DescType type, const void *data, Size data_size)
+        case 0x0A08:
+            break;
+        // OSErr AEInteractWithUser(int32_t timeout, NMRecPtr nm_req, IdleUPP idle_proc)
+        case 0x061C:
+            found = true; // Preparing to show a dialog. Nothing else to do here at the moment.
+            break;
+        // OSErr AEManagerInfo(LONGINT *resultp)
+        case 0x0441:
+            break;
+        // OSErr AEDisposeToken(AEDesc *theToken)
+        case 0x023A:
+            break;
+        // OSErr AEResolve(AEDesc *objectSpecifier, INTEGER callbackFlags, AEDesc *theToken)
+        case 0x0536:
+            break;
+        // OSErr AERemoveObjectAccessor(DescType desiredClass, DescType containerType, ProcPtr theAccessor, Boolean isSysHandler)
+        case 0x0738:
+            break;
+        // OSErr AEInstallObjectAccessor(DescType desiredClass, DescType containerType, ProcPtr theAccessor, LONGINT refcon, Boolean isSysHandler)
+        case 0x0937:
+            break;
+        // OSErr AEGetObjectAccessor(DescType desiredClass, DescType containerType, ProcPtr *theAccessor, LONGINT *accessorRefcon, Boolean isSysHandler)
+        case 0x0939:
+            break;
+        // OSErr AECallObjectAccessor(DescType desiredClass, AEDesc *containerToken, DescType containerClass, DescType keyForm, AEDesc *keyData, AEDesc *theToken)
+        case 0x0C3B:
+            break;
+        // OSErr AESetObjectCallbacks(ProcPtr myCompareProc, ProcPtr myCountProc, ProcPtr myDisposeTokenProc, ProcPtr myGetMarkTokenProc, ProcPtr myMarkProc, ProcPtr myAdjustMarksProc, ProcPtr myGetErrDescProc)
+        case 0x0E35:
+            break;
+        default:
+            break;
+    }
+
+    // Fix up the stack. Skip all the parameter that the caller pushed here.
+    if (!handled) {
+        sp += words_on_stack * 2; // each word is 2 bytes
+    }
+
+    m68k_write_memory_16(sp, osErr);
+    sp -= 4; m68k_write_memory_32(sp, ret);
+    m68k_set_reg(M68K_REG_SP, sp);
+    //m68k_set_reg(M68K_REG_D0, osErr);
+
+    if (found) return;
+
+    mosDebugPrintPCHistory();
+    mosError("Unimplemented trap Pack8: %04X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
+    mosError("This is a hack to get NTK to launch");
+
+    debug_break();
+}
+
+/**
+ * Set the current resource file.
+ * \code
+ * PROCEDURE UseResFile (refNum: Integer);
+ * \endcode
+ * Toolbox
+ */
+void trapUseResFile(unsigned short /* instr */) // A998
+{
+    mosPtr sp = m68k_get_reg(0L, M68K_REG_SP);
+    mosPtr ret = m68k_read_memory_32(sp); sp+=4; // pop the return address
+    uint16_t refNum = m68k_read_memory_16(sp); sp+=2; // pop the refNum
+
+    mosDebug("UseResFile: refNum=%u\n", refNum);
+    if (refNum != 1) {
+        printf("UseResFile: refNum=%u is not 1, not supported\n", refNum);
+    }
+
+    sp -= 4; m68k_write_memory_32(sp, ret);
+    m68k_set_reg(M68K_REG_SP, sp);
+
+}
+/**
+ * Handle the _HWPriv trap.
+ */
+void trapHWPriv(unsigned short /* instr */) // A198
+{
+    uint16_t selector = m68k_get_reg(0L, M68K_REG_D0);
+    mosDebug("_HWPriv trap invoked (selector = %d)\n", selector);
+    m68k_set_reg(M68K_REG_D0, 0); // Pretend we did it!
+}
 
 /**
  * Go from m68k emulation into host native code.
@@ -1291,6 +1608,11 @@ void trapALineDispatch(unsigned short trap)
     if (mosIsOSTrap(trap)) {
         trapAddress = GetOSTrapAddress(trap);
     } else {
+        if (mosToolboxTrapAutoPop(trap)) {
+            sp+=4; // Pop the latest return address. It's just a trampoline somewhere.
+            m68k_set_reg(M68K_REG_SP, sp);
+            gCurrentTrap = trap = trap & 0xFBFF; // Clear the AutoPop flag.
+        }
         trapAddress = GetToolboxTrapAddress(trap);
     }
     m68k_set_reg(M68K_REG_PC, trapAddress);
@@ -1478,11 +1800,14 @@ void mosSetupTrapTable()
     //createGlue(0xA647, trapSetTrapAddress);
     createGlue(0xA9F0, trapLoadSeg);
     createGlue(0xA069, trapHGetState);
+    createGlue(0xA06A, trapHSetState);
     createGlue(0xA055, trapStripAddress);
     createGlue(0xA9A0, trapGetResource);
+    createGlue(0xA81F, trapGetResource); // _Get1Resource
     createGlue(0xA9A2, trapLoadResource);
     createGlue(0xA9A5, trapSizeResource);
     createGlue(0xA9A1, trapGetNamedResource);
+    createGlue(0xA820, trapGetNamedResource); // _Get1NamedResource
     //tncTable[0x0820] = tncTable[0x09A1];
     createGlue(0xA88F, trapOSDispatch);
     createGlue(0xA9C6, trapSecondsToDate);
@@ -1497,6 +1822,10 @@ void mosSetupTrapTable()
 
     // For NTK: startup code chack if this is implemented
     createGlue(0xA80B, trapPopUpMenuSelect);
+    createGlue(0xA860, trapWaitNextEvent);
+    createGlue(0xA816, trapPack8);
+    createGlue(0xA998, trapUseResFile);
+    createGlue(0xA198, trapHWPriv); // _HWPriv
 
     mosSetupTrapManager();
     mosSetupGestaltTraps();

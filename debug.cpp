@@ -26,6 +26,7 @@
 #include "log.h"
 #include "systemram.h"
 #include "resourcefork.h"
+#include "progress.h"
 
 #include <string.h>
 
@@ -64,7 +65,7 @@ void mosDebugPrintCPUState(int cpu, int registers, int stack)
     if (stack) {
         constexpr int stack_line_size = 16;
         for (int i = 0; i < stack; i++) {
-            fprintf(stderr, " sp-%3d:", i * stack_line_size);
+            fprintf(stderr, " sp+%04X:", i * stack_line_size);
             for (int j = 0; j < stack_line_size; j++) {
                 uint32_t sp_addr = sp + i * stack_line_size + j;
                 fprintf(stderr, " %02X", m68k_read_memory_8(sp_addr));
@@ -90,18 +91,37 @@ void mosDebugPrintCPUState(int cpu, int registers, int stack)
 
 void mosDebugPrintPCHistory()
 {
+    mosProgressReport();
     mosTrace("PC history:\n");
     char buf[255];
     unsigned int pc = 0;
     for (int i=0; i<M68K_PC_HISTORY_SIZE; i++) {
         pc = m68k_get_pc_history(M68K_PC_HISTORY_SIZE-i-1);
         if (pc==0) continue;
-        m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
-        mosDebug("  %4d: 0x%08X %s %s\n", M68K_PC_HISTORY_SIZE-i, pc, printAddr(pc), buf);
+        if (mosCheckMemoryAccess(pc, 4, false)) {
+            m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+            mosDebug("  %4d: 0x%08X %s %s\n", M68K_PC_HISTORY_SIZE-i, pc, printAddr(pc), buf);
+        } else {
+            mosDebug("  %4d: 0x%08X ERR.RRANGE <invalid memory>\n", M68K_PC_HISTORY_SIZE-i, pc);
+        }
     }
     pc = m68k_get_reg(0L, M68K_REG_PC);
-    m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
-    mosDebug("  %4d: 0x%08X %s %s\n", 0, pc, printAddr(pc), buf);
+    if (mosCheckMemoryAccess(pc, 4, false)) {
+        m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+        mosDebug("  %4d: 0x%08X %s %s\n", 0, pc, printAddr(pc), buf);
+    } else {
+        mosDebug("  %4d: 0x%08X ERR.RRANGE <invalid memory>\n", 0, pc);
+    }
+}
+
+std::string mosStr255ToStr(mosPtr str255)
+{
+    uint8_t length = m68k_read_memory_8(str255);
+    std::string result;
+    for (uint8_t i = 0; i < length; i++) {
+        result += static_cast<char>(m68k_read_memory_8(str255 + 1 + i));
+    }
+    return result;
 }
 
 
