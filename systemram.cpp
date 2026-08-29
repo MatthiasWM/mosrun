@@ -163,8 +163,8 @@ unsigned int m68k_read_memory_32(unsigned int address)
     switch (address) {
         case 0: return 0;
         case 4: return 0;
-        case 0x0028: return trapDispatchTrap;
-        case 0x002C: return trapFLineDispatchTrap; // Line1111 (F-line/coprocessor) emulator trap
+        case 0x0028: return gTrapDispatchALineStub;
+        case 0x002C: return gTrapDispatchFLineStub; // Line1111 (F-line/coprocessor) emulator trap
         case 0x020C: return mosTickCount(); /* Time */
         case 0x0316: return gMosMPWHandle;
         case 0x0904: return gMosCurrentA5; // CurrentA5 [GLOBAL VAR] boundary between app globals and app parameters

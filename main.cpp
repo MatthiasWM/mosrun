@@ -315,7 +315,7 @@ int runApp()
     m68k_pulse_reset();
     m68k_set_cpu_type(M68K_CPU_TYPE_68020);
     m68k_set_reg(M68K_REG_PC, gMosCurrentA5 + gMosCurJTOffset + 2);
-    m68k_write_memory_32(gMosCurrentStackBase-4, trapExitApp); // end of app
+    m68k_write_memory_32(gMosCurrentStackBase-4, gTrapExitAppStub); // end of app
     m68k_set_reg(M68K_REG_SP, gMosCurrentStackBase-4);
     m68k_set_reg(M68K_REG_A5, gMosCurrentA5);
     m68k_set_instr_hook_callback(m68k_instruction_hook);
@@ -348,12 +348,15 @@ int setupSystem(int argc, const char **argv, const char**)
     gMosCurrentStackBase = mosNewPtr(MOS_STACK_SIZE) + MOS_STACK_SIZE;
 
     // create other memory that will be accessed by the emulation
-    trapDispatchTrap = mosNewPtr(2);
-    mosWrite16(trapDispatchTrap, 0xaffd);
-    trapFLineDispatchTrap = mosNewPtr(2);
-    mosWrite16(trapFLineDispatchTrap, 0xaffb);
-    trapExitApp = mosNewPtr(2);
-    mosWrite16(trapExitApp, 0xaffc);
+    // -- handle A-line traps here:
+    gTrapDispatchALineStub = mosNewPtr(2);
+    mosWrite16(gTrapDispatchALineStub, 0xaffd);
+    // -- handle F-line traps here:
+    gTrapDispatchFLineStub = mosNewPtr(2);
+    mosWrite16(gTrapDispatchFLineStub, 0xaffb);
+    // -- handle application exit here:
+    gTrapExitAppStub = mosNewPtr(2);
+    mosWrite16(gTrapExitAppStub, 0xaffc);
 
     // create supported trap glue
     mosSetupTrapTable();

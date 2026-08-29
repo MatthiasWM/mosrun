@@ -51,7 +51,7 @@ static void recordCodeSegment(int id, mosPtr start, mosPtr end)
         it->second.end = end;
         return;
     }
-    printf("recordCodeSegment: adding new segment %d from 0x%08X to 0x%08X\n", id, start, end);
+    //printf("recordCodeSegment: adding new segment %d from 0x%08X to 0x%08X\n", id, start, end);
     // Add a new code segment
     gCodeSegments.emplace(std::pair<int, CodeSegmentInfo>{id, CodeSegmentInfo{id, start, end}});
 }

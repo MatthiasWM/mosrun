@@ -48,6 +48,7 @@
 // Include our own interfaces
 
 #include "traps.h"
+#include "OS/TrapManager.h"
 #include "names.h"
 #include "log.h"
 #include "memory.h"
@@ -70,11 +71,23 @@ extern "C" {
 #include "musashi331/m68kops.h"
 }
 
+// Any machine command starting with 0xA... jumps to this address where it will
+// find a new trap, 0xAFFD, which call back into mosrun to dispatch the trap.
+unsigned int gTrapDispatchALineStub = 0;
 
-unsigned int trapDispatchTrap = 0;
-unsigned int trapFLineDispatchTrap = 0;
-unsigned int trapExitApp = 0;
+// Any machine command starting with 0xF... jumps to this address where it will
+// find a new trap, 0xAFFB, which handle Floating Point and MMU instructions..
+unsigned int gTrapDispatchFLineStub = 0;
 
+// When the MacOS application exits, it will jump to this address where it will
+// find trap 0xAFFC, which calls back into mosrun to handle the application exit.
+unsigned int gTrapExitAppStub = 0;
+
+// The current trap number. This is used to dispatch the appropriate trap handler
+// in gTrapDispatchALineStub and gTrapDispatchFLineStub.
+uint16_t gCurrentTrap = 0;
+
+mosPtr gGlue_Unimplemented = 0;
 
 /**
  * Utility function.
@@ -116,12 +129,28 @@ void hexDump(mosPtr a, unsigned int n)
 //    unsigned short rts;
 //} TrapNativeCall;
 
-
-uint16_t gCurrentTrap = 0;
-
 // every entry in this array points to an m68k code segment ("glue") that calls a native function in host memory
-mosPtr *tncTable = 0;
+mosPtr gToolboxTrapTable = 0;
+mosPtr gOSTrapTable = 0;
+// OS Trap Table: Contains 00E0 (224 decimal) entries starting at low-memory
+// base $00000400. (Opcodes range from $A000 to $A0DF).
+// Toolbox Trap Table: Contains 0200 (512 decimal) entries starting at
+// low-memory base $00000E00. (Opcodes range from $A800 to $A9FF and beyond up to $AFFP).
 
+// 1010.1zyx.xxxx.xxxx: Toolbox: x = trap #, if z is 1, pop the extra return address from the stack
+// z=1 adds an extra return address between the return address and the parameters on the stack.
+// Setting the auto-pop bit tells the dispatcher to strip that 4-byte return address before jumping into the real routine.
+// x.xxxx.xxx = 512 (0x200) possible entries. y was later added, resulting in 1024 (0x400)possible entries.
+// This is tested by checking if 0xAA6E and 0xA86E (InitGraf) point to the same address (0x200)
+// or different addresses (0x400) (GetTrapAddress vs. NGetTrapAddress)
+// Pascal calling convention: args pushed left-to-right, callee pops everything
+// including its own return address before resuming)
+
+// 1010.0yyz.xxxx.xxxx: OS trap: x = trap #, yy are extra flags that can be used by the traps
+// If z is set, A0 returns a value, otherwise A0 will be preserved.
+// OS traps arguments are stored in A0 and D0, or pointer to by A0 if more than two arguments are needed.
+// Data is returned in D0 (result code), and optionally in A0 (result data) as well.
+// xxxx.xxxx = 256 possible entries
 
 /**
  * Load a resource using a fourCC code.
@@ -236,41 +265,28 @@ void trapSizeResource(unsigned short )
 
 
 /**
- * Allocate a block of non-movable bytes and set them to 0.
- *
- * D0 = desired size in bytes.
- * \returns pointer to allocated area in A0
- * \returns possible error in D0
- *
- * \todo this must also set the global MemErr variable
- */
-void trapNewPtrClear(unsigned short)
-{
-    unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
-
-    mosTrace("            NewPtrClear(%d)\n", size);
-    unsigned int ptr = mosNewPtr(size);
-
-    m68k_set_reg(M68K_REG_A0, ptr);
-    m68k_set_reg(M68K_REG_D0, 0);
-}
-
-
-/**
  * Allocate a block of non-movable bytes.
  *
  * D0 = desired size in bytes.
+ * Bit9: CLEAR
+ * Bit10: SYS (1 = allocate system RAM, 0 = allocate app RAM)
  * \returns pointer to allocated area in A0
  * \returns possible error in D0
  *
  * \todo this must also set the global MemErr variable
  */
-void trapNewPtr(unsigned short)
+void trapNewPtr(unsigned short instr)
 {
     unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
 
-    mosTrace("            NewPtr(%d)\n", size);
-    unsigned int ptr = mosNewPtr(size);
+    unsigned int ptr = 0;
+    if (mosOSTrapBit9(instr)) {
+        mosTrace("            NewPtrClear(%d)\n", size);
+        ptr = mosNewPtr(size);
+    } else {
+        mosTrace("            NewPtr(%d)\n", size);
+        ptr = mosNewPtr(size);
+    }
 
     m68k_set_reg(M68K_REG_A0, ptr);
     m68k_set_reg(M68K_REG_D0, 0);
@@ -430,42 +446,6 @@ void trapBlockMove(unsigned short)
 }
 
 
-/**
- * Get the address of the trap function for a given trap number.
- *
- * This function returns the address of the trap glue. It is absolutely legal
- * for the emulation to jump to this address. Making this work required a few
- * extra hoops to jump through.
- *
- * D0 = trap number
- * \return trap address in A0
- */
-void trapGetTrapAddress(unsigned short)
-{
-    unsigned int trap = m68k_get_reg(0L, M68K_REG_D0);
-
-    unsigned int addr = (unsigned int)tncTable[trap&0x0fff];
-    mosTrace("            GetTrapAddress(0x%04X=%s) = 0x%08X\n", trap, trapName(trap), addr);
-
-    m68k_set_reg(M68K_REG_A0, addr);
-}
-
-
-/**
- * Set the address of the trap function for a given trap number.
- *
- * D0 = trap number
- * A0 = new trap function address
- */
-void trapSetTrapAddress(unsigned short)
-{
-    uint32_t trap = m68k_get_reg(0L, M68K_REG_D0);
-    mosPtr addr = m68k_get_reg(0L, M68K_REG_A0);
-
-    trap = (trap & 0x0dff) | 0xa800;
-    mosTrace("            SetTrapAddress(0x%04X=%s, 0x%08X)\n", trap, trapName(trap), addr);
-    tncTable[trap&0x0fff] = addr;
-}
 
 
 /**
@@ -658,7 +638,7 @@ void trapOSDispatch(unsigned short )
             unsigned int size = m68k_read_memory_32(sp); sp += 4;
 
             unsigned int handle = mosNewHandle(size);
-            mosTrace("trapDispatch(0x1D): Allocated a master pointer at 0x%08X\n", handle);
+            mosTrace("trapALineDispatch(0x1D): Allocated a master pointer at 0x%08X\n", handle);
 
             if (resultCodePtr) m68k_write_memory_16(resultCodePtr, 0);
             m68k_write_memory_32(sp, handle);
@@ -1210,9 +1190,22 @@ void trapExitToShell(unsigned short )
  *
  * No inputs or outputs.
  */
-void trapUninmplemented(unsigned short ) {
-    // FIXME: $a01f; opcode 1010 (_DisposePtr)
-    mosError("Unimplemented trap 0x%08X: %s\n", gCurrentTrap, trapName(gCurrentTrap));
+void trapUninmplemented(unsigned short trap)
+{
+    // Give some feedback on a Toolbox trap
+    if (mosIsToolboxTrap(trap)) {
+        mosError("Unimplemented Toolbox trap %04X, index=%d: %s\n",
+            trap, mosToolboxTrapIndex(trap), trapName(trap));
+    }
+
+    // Give some feedback on an OS trap
+    if (mosIsOSTrap(trap)) {
+        mosError("Unimplemented OS trap %04X, index=%d: %s\n",
+            trap, mosOSTrapIndex(trap), trapName(trap)
+        );
+    }
+
+    // Jump into the debugger (or exit)
     debug_break();
 }
 
@@ -1233,12 +1226,12 @@ void trapPopUpMenuSelect(unsigned short ) {
  * The current PC is used as a pointer to the TrapNativeCall structure, which
  * then contains the pointer to the native function and the RTS instruction.
  */
-void trapGoNative(unsigned short )
+void trapGoNative(unsigned short instr)
 {
     unsigned int pc = m68k_get_reg(0L, M68K_REG_PC);
 
     void (*nativeCodeEntry)(uint16_t) = (void (*)(uint16_t))mosReadUnsafe64(pc+4);
-    nativeCodeEntry(gCurrentTrap);
+    nativeCodeEntry(instr);
 
     pc = pc + 12; // skip alignment space and native target address
     m68k_set_reg(M68K_REG_PC, pc);
@@ -1279,19 +1272,28 @@ void trapBreakpoint(unsigned short )
  * CPU is in supervisor mode. However, we want to run the trap code in user
  * mode, having only the return address on the stack.
  */
-void trapDispatch(unsigned short)
+void trapALineDispatch(unsigned short trap)
 {
     unsigned int sp = m68k_get_reg(0L, M68K_REG_SP);
-    unsigned int new_sr = m68k_read_memory_16(sp); sp+=2; // pop the status register
-    unsigned int ret_addr = m68k_read_memory_32(sp); sp+=4;
-    /*unsigned int vec =*/ m68k_read_memory_16(sp); sp+=2;
+    unsigned int new_sr = m68k_read_memory_16(sp); sp+=2;   // pop the status register
+    unsigned int ret_addr = m68k_read_memory_32(sp); sp+=4; // pop the return address
+    /*unsigned int vec =*/ m68k_read_memory_16(sp); sp+=2;  // pop the vector number
 
-    sp-=4; m68k_write_memory_32(sp, ret_addr);
-    m68ki_set_sr_noint(new_sr);
+    sp-=4; m68k_write_memory_32(sp, ret_addr);              // push the return address again
+    m68ki_set_sr_noint(new_sr);                             // leave interrupt mode
     // just leave the return address on the stack
     m68k_set_reg(M68K_REG_SP, sp);
-    // set the new PC according to our jump table to allow patched jump tables
-    m68k_set_reg(M68K_REG_PC, (unsigned int)tncTable[gCurrentTrap&0x0fff]);
+    // Handle Toolbox and OS traps according to the current trap number.
+    // 1010.1z0x.xxxx.xxxx: Toolbox: x = trap #, if z is 1, pop the extra return address from the stack
+    // 1010.0yyz.xxxx.xxxx: OS tarp: x = trap #, yy are extra flags that can be used by the traps
+
+    mosPtr trapAddress = 0;
+    if (mosIsOSTrap(trap)) {
+        trapAddress = GetOSTrapAddress(trap);
+    } else {
+        trapAddress = GetToolboxTrapAddress(trap);
+    }
+    m68k_set_reg(M68K_REG_PC, trapAddress);
 }
 
 
@@ -1336,16 +1338,28 @@ void trapFLineDispatch(unsigned short)
 /**
  * Create jump table entry in simulator space.
  */
-mosPtr createGlue(unsigned short index, void (*nativeCodeEntry)(uint16_t))
+mosPtr createGlue(unsigned short trapNum, void (*nativeCodeEntry)(uint16_t))
 {
-    // FIXME: unaligned format
-    mosPtr p = mosNewPtr(16);
-    mosWrite16(p+ 0, 0xAFFF);           // trap native
+    // Create the glue that connects the trap table entry to the native code function
+    mosPtr p = mosNewPtr(16);           // 16 bytes
+    mosWrite16(p+ 0, 0xAFFF);           // trap to native
     mosWriteUnsafe64(p+ 4, (uintptr_t)nativeCodeEntry);  // pointer into host memory
     mosWrite16(p+12, 0x4E75);           // rts
 
-    if (index) {
-        tncTable[index&0x0FFF] = p;
+    if (trapNum == 0) return p;
+
+    if (mosIsOSTrap(trapNum)) {
+        // printf("Creating glue for OS trap 0x%04X (%d) at %p\n", trapNum, mosOSTrapIndex(trapNum), (void*)nativeCodeEntry);
+        if (GetOSTrapAddress(trapNum) != gGlue_Unimplemented) {
+            mosWarning("Overwriting existing OS trap glue for trap 0x%04X\n", trapNum);
+        }
+        SetOSTrapAddress(p, trapNum);
+    } else {
+        // printf("Creating glue for Toolbox trap 0x%04X (%d) at %p\n", trapNum, mosToolboxTrapIndex(trapNum), (void*)nativeCodeEntry);
+        if (GetToolboxTrapAddress(trapNum) != gGlue_Unimplemented) {
+            mosWarning("Overwriting existing Toolbox trap glue for trap 0x%04X\n", trapNum);
+        }
+        SetToolboxTrapAddress(p, trapNum);
     }
 
     return p;
@@ -1359,10 +1373,19 @@ void mosSetupTrapTable()
 {
     int i;
 
-    mosPtr tncUnimplemented = createGlue(0, trapUninmplemented);
-    tncTable = (mosPtr*)calloc(0x0fff, sizeof(mosPtr));
-    for (i=0; i<0x0FFF; i++) {
-        tncTable[i] = tncUnimplemented;
+    // Create the glue for the _Unimplemented call
+    gGlue_Unimplemented = createGlue(0, trapUninmplemented);
+
+    // Set up the Toolbox trap table to all _Unimplemented
+    gToolboxTrapTable = mosNewPtr(kToolboxTrapTableSize*4);
+    for (i=0; i<kToolboxTrapTableSize; i++) {
+        mosWrite32(gToolboxTrapTable+i*4, gGlue_Unimplemented);
+    }
+
+    // Set up the OS trap table to all _Unimplemented
+    gOSTrapTable = mosNewPtr(kOSTrapTableSize*4);
+    for (i=0; i<kOSTrapTableSize; i++) {
+        mosWrite32(gOSTrapTable+i*4, gGlue_Unimplemented);
     }
 
     // -- Initialization and Allocation
@@ -1395,7 +1418,6 @@ void mosSetupTrapTable()
     // -- Allocating and Releasing Nonrelocatable Blocks
 
     createGlue(0xA11E, trapNewPtr);
-    createGlue(0xA31E, trapNewPtrClear);
     createGlue(0xA01F, trapDisposePtr);
     // GetPtrSize
     // SetPtrSize
@@ -1417,7 +1439,7 @@ void mosSetupTrapTable()
     createGlue(0xA049, trapHPurge);
     createGlue(0xA04A, trapHNoPurge);
     createGlue(0xA162, trapPurgeSpace);
-    tncTable[0x0562] = tncTable[0x0162]; // _PurgeSpaceSys, same signature
+    //tncTable[0x0562] = tncTable[0x0162]; // _PurgeSpaceSys, same signature
     createGlue(0xA9F4, trapExitToShell);
 
     // -- Grow Zone Operations
@@ -1435,13 +1457,13 @@ void mosSetupTrapTable()
     // -- Low Level File Functions
 
     createGlue(0xA000, trapHOpen);
-    tncTable[0x0200] = tncTable[0x0000];
+    //tncTable[0x0200] = tncTable[0x0000];
     createGlue(0xA001, trapClose);
     createGlue(0xA002, trapRead);
     createGlue(0xA003, trapWrite);
     createGlue(0xA008, trapCreate);
     createGlue(0xA009, trapDelete);
-    tncTable[0x0209] = tncTable[0x0009];
+    //tncTable[0x0209] = tncTable[0x0009];
     createGlue(0xA00C, trapGetFileInfo);
     createGlue(0xA00D, trapSetFileInfo);
     createGlue(0xA012, trapSetEOF);
@@ -1450,10 +1472,10 @@ void mosSetupTrapTable()
 
     // -- unsorted
 
-    createGlue(0xA146, trapGetTrapAddress);
-    tncTable[0x0746] = tncTable[0x0146];
-    tncTable[0x0346] = tncTable[0x0146];
-    createGlue(0xA647, trapSetTrapAddress);
+    // createGlue(0xA146, trapGetTrapAddress);
+    //tncTable[0x0746] = tncTable[0x0146];
+    //tncTable[0x0346] = tncTable[0x0146];
+    //createGlue(0xA647, trapSetTrapAddress);
     createGlue(0xA9F0, trapLoadSeg);
     createGlue(0xA069, trapHGetState);
     createGlue(0xA055, trapStripAddress);
@@ -1461,7 +1483,7 @@ void mosSetupTrapTable()
     createGlue(0xA9A2, trapLoadResource);
     createGlue(0xA9A5, trapSizeResource);
     createGlue(0xA9A1, trapGetNamedResource);
-    tncTable[0x0820] = tncTable[0x09A1];
+    //tncTable[0x0820] = tncTable[0x09A1];
     createGlue(0xA88F, trapOSDispatch);
     createGlue(0xA9C6, trapSecondsToDate);
     createGlue(0xA975, trapTickCount);
@@ -1476,6 +1498,7 @@ void mosSetupTrapTable()
     // For NTK: startup code chack if this is implemented
     createGlue(0xA80B, trapPopUpMenuSelect);
 
+    mosSetupTrapManager();
     mosSetupGestaltTraps();
     mosSetupQuickDrawTraps();
     mosSetupWindowMgrTraps();

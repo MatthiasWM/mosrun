@@ -32,6 +32,7 @@ set(
     eventmgr.cpp eventmgr.h
     menumgr.cpp menumgr.h
     dialogmgr.cpp dialogmgr.h
+    OS/TrapManager.cpp OS/TrapManager.h
     ./musashi331/m68kops.c
     ./musashi331/m68kopac.c
     ./musashi331/m68kopnz.c

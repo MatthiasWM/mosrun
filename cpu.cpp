@@ -68,7 +68,6 @@ void m68k_instruction_hook()
             mosDebugPrintCPUState(1, 2, 4);
         }
 
-
         // 0x002B60DC
         // 1e, 1f, 20, 21, 22, 23, 12, 15, 14, 16, 18, 9
         // 4 == 605 (sge d0
@@ -170,10 +169,10 @@ void m68k_instruction_hook()
                     unsigned int resultCode = m68k_read_memory_32(mpwMem+0x000E);
                     mosDebug("End Of Emulation (returns %d)\n", resultCode);
                     exit(resultCode); }
-                case 0xaffb: trapFLineDispatch(instr); break;
-                case 0xaffd: trapDispatch(instr); break;
+                case 0xaffb: trapFLineDispatch(gCurrentTrap); break;
+                case 0xaffd: trapALineDispatch(gCurrentTrap); break;
                 case 0xaffe: trapBreakpoint(instr); goto afterBreakpoint;
-                case 0xafff: trapGoNative(instr); break; // TODO: unverified
+                case 0xafff: trapGoNative(gCurrentTrap); break; // TODO: unverified
                 default:
                     gCurrentTrap = instr;
                     return; // execute it!
