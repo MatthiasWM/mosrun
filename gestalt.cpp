@@ -83,7 +83,7 @@ void trapGestalt(unsigned short )
         case 'xlat': response = 0x0000001b; break;
         case 'stdf': response = 0x00000017; break;
         case 'qtim': response = 0x02108000; break;
-        case 'tsmv': response = 0x00000001; break;
+        case 'tsmv': response = 0x00000001; break; // Text Services Manager
         case 'sysa': response = 0x00000001; break; // gestaltSysArchitecture
 
         default:

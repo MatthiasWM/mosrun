@@ -298,6 +298,9 @@ void trapNewPtr(unsigned short instr)
 /**
  * Allocate a block of movable bytes.
  *
+ * In the original code, we have flags for sys memory and clear memory.
+ * a122 a322 a522 a722
+ *
  * D0 = desired size in bytes.
  * \returns handle to allocated area in A0
  * \returns possible error in D0
@@ -531,6 +534,20 @@ void trapLoadSeg(unsigned short )
     m68k_set_reg(M68K_REG_SP, sp);
 }
 
+void trapUnloadSeg(unsigned short )
+{
+    mosDebugPrintPCHistory(16);
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    mosPtr ret  = m68k_read_memory_32(sp); sp += 4;
+    /*mosPtr func =*/ m68k_read_memory_32(sp); sp += 4;
+
+    // Unload the Code segment that contains the routineAddr 'func'
+
+    sp -= 4; m68k_write_memory_32(sp, ret);
+    m68k_set_reg(M68K_REG_SP, sp);
+}
+
 
 /**
  * Get the state of a master pointer.
@@ -553,7 +570,8 @@ void trapLoadSeg(unsigned short )
  * \todo add support for these flags (it's all already in the memory manager)
  */
 void trapHGetState(unsigned short ) {
-    m68k_set_reg(M68K_REG_D0, 0x80); // locked memory // TODO: may need more flags!
+    mosPtr ptr = m68k_get_reg(0L, M68K_REG_A0);
+    m68k_set_reg(M68K_REG_D0, mosHGetState(ptr));
 }
 
 /**
@@ -564,7 +582,9 @@ void trapHGetState(unsigned short ) {
  * \endcode
  */
 void trapHSetState(unsigned short ) {
-    // nothing to do here
+    mosPtr ptr = m68k_get_reg(0L, M68K_REG_A0);
+    uint16_t state = m68k_get_reg(0L, M68K_REG_D0);
+    mosHSetState(ptr, state);
 }
 
 /**
@@ -585,7 +605,8 @@ void trapMoveHHi(unsigned short ) {
  * We never move memory, so there is no reason to implement this.
  */
 void trapHLock(unsigned short ) {
-    // nothing to do here
+    mosPtr ptr = m68k_get_reg(0L, M68K_REG_A0);
+    mosHLock(ptr);
 }
 
 
@@ -595,7 +616,8 @@ void trapHLock(unsigned short ) {
  * We never move memory, so there is no reason to implement this.
  */
 void trapHUnlock(unsigned short ) {
-    // nothing to do here
+    mosPtr ptr = m68k_get_reg(0L, M68K_REG_A0);
+    mosHUnlock(ptr);
 }
 
 
@@ -605,8 +627,7 @@ void trapHUnlock(unsigned short ) {
  * This function has been obsolete since 1992. Despite the Pascal-looking
  * documented signature (FUNCTION StripAddress (theAddress: Ptr) : Ptr),
  * real compiled callers invoke it as a register-based identity passthrough
- * (documentation conflicting if it is A0 to A0 or D0 to D0)), the same
- * "quick" convention as HLock/HUnlock
+ * (D0 to D0))
  */
 void trapStripAddress(unsigned short ) {
     // nothing to do here
@@ -676,51 +697,6 @@ void trapOSDispatch(unsigned short )
         }
         case 0x3A: { // OSErr GetProcessInformation(PSN: ProcessSerialNumber,
                      //                             VAR info: ProcessInfoRec);
-            // 0x26 -> 0x1a, 26
-            // TYPE ProcessInfoRec =
-            // RECORD
-            //     processInfoLength:   LongInt;       {0: length of process info record (56)}
-            //     processName:         StringPtr;     {4: name of this process}
-            //     processNumber:       ProcessSerialNumber;
-            //                                         {8: psn of this process}
-            //     processType:         LongInt;       {12: file type of application file}
-            //     processSignature:    OSType;        {16: signature of application file}
-            //     processMode:         LongInt;       {20: 'SIZE' resource flags}
-            //     processLocation:     Ptr;           {24: address of partition}
-            //     processSize:         LongInt;       {28: partition size}
-            //     processFreeMem:      LongInt;       {32: free bytes in heap}
-            //     processLauncher:     ProcessSerialNumber;
-            //                                         {36: process that launched this one}
-            //     processLaunchDate:   LongInt;       {44: time when launched}
-            //     processActiveTime:   LongInt;       {48: accumulated CPU time}
-            //     processAppSpec:      FSSpecPtr;     {52: location of the file}
-            // END;
-            // struct ProcessInfoRec {
-            //     unsigned long        processInfoLength;   /* 0: 0000003c length of record*/
-            //     StringPtr            processName;         /* 4: 00000000 name of process*/
-            //     ProcessSerialNumber  processNumber;       /* 8: 00000000 00002002 psn of the process*/
-            //        hi, lo
-            //     unsigned long        processType;         /* 16: 41 50 50 4c file type of app file*/
-            //     OSType               processSignature;    /* 20: 3f 3f 3f 3f signature of app file*/
-            //     unsigned long        processMode;         /* 24: 00 00 58 80 'SIZE' resource flags*/
-            //     Ptr                  processLocation;     /* 28: 03 f4 3e 94 address of partition*/
-            //     unsigned long        processSize;         /* 32: 00 01 d0 00 partition size*/
-            //     unsigned long        processFreeMem;      /* 36: 00 00 b0 dc free bytes in heap*/
-            //     ProcessSerialNumber  processLauncher;     /* 40: 00000000 00002000 proc that launched this */
-            //                                                 /* one*/
-            //     unsigned long        processLaunchDate;   /* 48: 0000111f time when launched*/
-            //     unsigned long        processActiveTime;   /* 52: 00000000 accumulated CPU time*/
-            //     FSSpecPtr            processAppSpec;      /* 56: 00000000 location of the file*/
-            // };
-            // ProcessName and ProcessAppSpec are set to 0 if we don;t need them
-            // 00 00 00 3c 00 00 00 00
-            // 00 00 00 00 00 00 20 02
-            // 41 50 50 4c 3f 3f 3f 3f
-            // 00 00 58 80 03 f4 3e 94
-            // 00 01 d0 00 00 00 b0 dc
-            // 00 00 00 00 00 00 20 00
-            // 00 00 11 1f 00 00 00 00
-            // 00 00 00 00 30 30 20 30
             // process mode flags:
             // modeDeskAccessory             = $00020000;
             // modeMultiLaunch               = $00010000;
@@ -736,9 +712,12 @@ void trapOSDispatch(unsigned short )
             // modeStationeryAware           = $00000010;
             // modeUseTextEditServices       = $00000008;
 
+            unsigned int total, contig;
+            mosFreeMemInfo(&total, &contig);
 
             unsigned int infoPtr = m68k_read_memory_32(sp); sp += 4;
             /*unsigned int psnPtr =*/ m68k_read_memory_32(sp); sp += 4;
+            // TODO: verify that psn is 2
 
             mosPtr d = infoPtr;
 
@@ -755,22 +734,21 @@ void trapOSDispatch(unsigned short )
             //     OSType               processSignature;    /* 20: 3f 3f 3f 3f signature of app file*/
             m68k_write_memory_32(d, 0x3f3f3f3f); d+=4;      // '????'
             //     unsigned long        processMode;         /* 24: 00 00 58 80 'SIZE' resource flags*/
-            m68k_write_memory_32(d, 0x00005880); d+=4;
+            m68k_write_memory_32(d, 0x000058e0); d+=4;      // TODO: just read the damn SIZE Resource!
             //     Ptr                  processLocation;     /* 28: 03 f4 3e 94 address of partition*/
-            m68k_write_memory_32(d, 0x03f43e94); d+=4;
-            //     unsigned long        processSize;         /* 32: 00 01 d0 00 partition size*/
-            m68k_write_memory_32(d, 0x0001d000); d+=4;
+            m68k_write_memory_32(d, kSystemHeapStart); d+=4;
+            //     unsigned long        processSize;         /* 32: partition size*/
+            // m68k_write_memory_32(d, kMosMemMax-kSystemHeapStart-1*1024*1024); d+=4;      // must not be smaller than processFreeMem
+            m68k_write_memory_32(d, total-1*1024*1024); d+=4;      // must not be smaller than processFreeMem
             //     unsigned long        processFreeMem;      /* 36: 00 00 b0 dc free bytes in heap*/
-            unsigned int total, contig;
-            mosFreeMemInfo(&total, &contig);
-            m68k_write_memory_32(d, total); d+=4;
+            m68k_write_memory_32(d, total-2*1024*1024); d+=4;
             //     ProcessSerialNumber  processLauncher;     /* 40: 00000000 00002000 proc that launched this one*/
             m68k_write_memory_32(d, 0x00002000); d+=4;
             m68k_write_memory_32(d, 0x0000003c); d+=4;
             //     unsigned long        processLaunchDate;   /* 48: 0000111f time when launched*/
             m68k_write_memory_32(d, 0x0000111f); d+=4;
             //     unsigned long        processActiveTime;   /* 52: 00000000 accumulated CPU time*/
-            m68k_write_memory_32(d, 0x00000000); d+=4;
+            m68k_write_memory_32(d, 0x00000002); d+=4;
             //     FSSpecPtr            processAppSpec;      /* 56: 00000000 location of the file*/
             m68k_write_memory_32(d, 0x00000000); d+=4;
             // };
@@ -888,7 +866,8 @@ void trapPurgeSpace(unsigned short )
  */
 void trapHPurge(unsigned short )
 {
-    // nothing to do here
+    mosPtr ptr = m68k_get_reg(0L, M68K_REG_A0);
+    mosHPurge(ptr);
 }
 
 
@@ -899,7 +878,8 @@ void trapHPurge(unsigned short )
  */
 void trapHNoPurge(unsigned short )
 {
-    // nothing to do here
+    mosPtr ptr = m68k_get_reg(0L, M68K_REG_A0);
+    mosHNoPurge(ptr);
 }
 
 
@@ -1530,8 +1510,8 @@ void trapUseResFile(unsigned short /* instr */) // A998
  */
 void trapHWPriv(unsigned short /* instr */) // A198
 {
-    uint16_t selector = m68k_get_reg(0L, M68K_REG_D0);
-    mosDebug("_HWPriv trap invoked (selector = %d)\n", selector);
+    //uint16_t selector = m68k_get_reg(0L, M68K_REG_D0);
+    //mosDebug("_HWPriv trap invoked (selector = %d)\n", selector);
     m68k_set_reg(M68K_REG_D0, 0); // Pretend we did it!
 }
 
@@ -1799,6 +1779,7 @@ void mosSetupTrapTable()
     //tncTable[0x0346] = tncTable[0x0146];
     //createGlue(0xA647, trapSetTrapAddress);
     createGlue(0xA9F0, trapLoadSeg);
+    createGlue(0xA9F1, trapUnloadSeg);
     createGlue(0xA069, trapHGetState);
     createGlue(0xA06A, trapHSetState);
     createGlue(0xA055, trapStripAddress);

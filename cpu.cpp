@@ -70,17 +70,68 @@ void m68k_instruction_hook()
         }
         uint16_t instr = m68k_read_memory_16(pc);
 
+        // static uint32_t xxx = 0xdead;
+        // uint32_t yyy = m68k_read_memory_32(40572+4*497);
+        // if (xxx != yyy) {
+        //     printf("xxx: 0x%08X, yyy: 0x%08X\n", xxx, yyy);
+        //     mosDebugPrintCPUState(1, 2, 4);
+        //     xxx = yyy;
+        // }
+
         static bool trace = false;
-        if (trace) {
-            mosDebugPrintCPUState(1, 2, 4);
+        static int trace_max = 0;
+
+        // static bool tt = false;
+        // if (pc == codeOffsetToAddr(1, 0x00009266)) tt = true;
+
+        // Trap the longjmp() call
+        if (pc == codeOffsetToAddr(2, 0x006262)) {
+            printf("Trapped longjmp() at PC: 0x%08X (%s)\n", pc, printAddr(pc));
+            mosDebugPrintPCHistory(8);
+            printf("");
         }
 
-        if (pc == codeOffsetToAddr(1, 0x009206)) {
+        // if (pc == codeOffsetToAddr(1, 0x000326)) {
+        //     mosDebugPrintPCHistory(8);
+        // }
+
+        // Trace a range of addresses, don't trace outside of this range
+        // if (pc >= codeOffsetToAddr(70, 0x1a) && pc <= codeOffsetToAddr(70, 0x000128)) {
+        //     mosDebugPrintCPUState(1, 1, 1);
+        //     //trace = true; //trace_max = 4;
+        //     int x = 3;
+        // }
+
+        // Start trace when the PC reaches a specific address
+        if (pc == codeOffsetToAddr(1, 0x0009234)) {
             trace = true;
+            //trace_max = 32; // Optional maximum number of traces after start
         }
-        if (pc == codeOffsetToAddr(1, 0x00924A)) {
-            trace = false;
+
+        if (trace) {
+            mosDebugPrintCPUState(1, 2, 4);
+            if (trace_max != 0) {
+                trace_max--;
+                if (trace_max == 0) {
+                    trace = false;
+                }
+            }
+            int x =3;
         }
+
+        // if (pc == codeOffsetToAddr(1, 0x326)) {
+        //     mosDebugPrintPCHistory(16);
+        // }
+
+        // if (pc == codeOffsetToAddr(1, 0x306a)) {
+        //     trace = true;
+        // }
+        // if (pc == codeOffsetToAddr(1, 0x3168)) {
+        //     trace = true;
+        // }
+        // if (pc == codeOffsetToAddr(1, 0x00924A)) {
+        //     trace = false;
+        // }
 
 #if 0 // leaving this code in here if I need to trace the stack again
         static bool trace = false;
@@ -147,7 +198,10 @@ void m68k_instruction_hook()
                 case 0xaffb: trapFLineDispatch(gCurrentTrap); break;
                 case 0xaffd: trapALineDispatch(gCurrentTrap); break;
                 case 0xaffe: trapBreakpoint(instr); goto afterBreakpoint;
-                case 0xafff: mosProgressTrap(gCurrentTrap); trapGoNative(gCurrentTrap); break; // TODO: unverified
+                case 0xafff:
+                    mosProgressTrap(gCurrentTrap);
+                    trapGoNative(gCurrentTrap);
+                    break; // TODO: unverified
                 default:
                     gCurrentTrap = instr;
                     return; // execute it!

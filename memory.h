@@ -65,10 +65,16 @@ unsigned int mosPtrSize(mosPtr);
 
 mosHandle mosNewHandle(unsigned int size);
 void mosDisposeHandle(mosHandle);
+void mosHLock(mosHandle hdl);
+void mosHUnlock(mosHandle hdl);
+void mosHPurge(mosHandle hdl);
+void mosHNoPurge(mosHandle hdl);
+uint16_t mosHGetState(mosHandle hdl);
+void mosHSetState(mosHandle hdl, uint16_t state);
+
 mosHandle mosRecoverHandle(mosPtr);
 int mosSetHandleSize(mosHandle, unsigned int);
-mosPtr mosHLock(mosHandle h);
-void mosHUnlock(mosHandle h);
+mosPtr mosPtrFromHandle(mosHandle h);
 
 unsigned int mosCheckBounds(mosPtr, unsigned int size);
 

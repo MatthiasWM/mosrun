@@ -89,6 +89,13 @@
 
 // NTK progress:
 // AUG/29/26 - 17:51 :   5'542'812 instructions executed, 185 trap calls dispatched
+// 00003168  4879 0000 02C0           push.l     0x2C0
+// 0000316E  A9F1                     syscall    UnloadSeg ***
+// label00003170:
+// 00003170  486F 0004                pea.l      [A7 + 0x4]
+// 00003174  486F 0004                pea.l      [A7 + 0x4]
+//
+// 0x002CBD98 001.0003EC: move.w  #$0, -(A7)
 
 // Inlcude all the required system headers
 

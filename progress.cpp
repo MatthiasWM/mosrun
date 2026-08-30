@@ -31,6 +31,7 @@
 
 extern "C" {
 #include "musashi331/m68k.h"
+#include "musashi331/m68kcpu.h"
 }
 
 
@@ -41,7 +42,7 @@ static const uint64_t kHeartbeatInterval = 1'000'000;
 
 // How many of the most recently dispatched traps to remember for the
 // postmortem report.
-static const int kRecentTrapSlots = 16;
+static const int kRecentTrapSlots = 64;
 
 struct RecentTrap {
     uint64_t atInstruction = 0;
@@ -77,7 +78,7 @@ void mosProgressTrap(uint16_t trap)
     RecentTrap &slot = gRecentTraps[gRecentTrapNext];
     slot.atInstruction = gInstructionCount;
     slot.trap = trap;
-    slot.callerPC = m68k_get_reg(0L, M68K_REG_PC);
+    slot.callerPC = REG_PPC; //m68k_get_reg(0L, M68K_REG_PC);
     gRecentTrapNext = (gRecentTrapNext + 1) % kRecentTrapSlots;
 }
 

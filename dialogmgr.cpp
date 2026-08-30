@@ -100,12 +100,12 @@ void trapAlert(unsigned short )
     bool found = false;
     mosHandle hAlrt = GetResource('ALRT', alertID);
     if (hAlrt) {
-        mosPtr pAlrt = mosHLock(hAlrt);
+        mosPtr pAlrt = mosPtrFromHandle(hAlrt);
         printf("\n");
         uint16_t ditlID = m68k_read_memory_16(pAlrt+8);
         mosHandle hDitl = GetResource('DITL', ditlID);
         if (hDitl) {
-            mosPtr pDitl = mosHLock(hDitl);
+            mosPtr pDitl = mosPtrFromHandle(hDitl);
             uint16_t n = m68k_read_memory_16(pDitl);
             mosPtr src = pDitl+2;
             for (uint16_t i = 0; i < n; i++) {

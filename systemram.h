@@ -35,7 +35,10 @@ extern unsigned int gMosSegHiEnable;
 extern unsigned int gMosResErr;
 extern unsigned int gMosMemErr;
 extern unsigned int gMosMPWHandle;
-extern unsigned int gMosHWCfgFlags;
+
+extern uint16_t gMosACount;         // 0x0A9A:
+extern uint16_t gMosHWCfgFlags;     // 0x0B22: Basilisk test
+
 
 extern "C" {
 unsigned int m68k_read_memory_8(unsigned int address);

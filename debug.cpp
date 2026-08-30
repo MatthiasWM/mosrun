@@ -89,13 +89,14 @@ void mosDebugPrintCPUState(int cpu, int registers, int stack)
 }
 
 
-void mosDebugPrintPCHistory()
+void mosDebugPrintPCHistory(int max)
 {
     mosProgressReport();
     mosTrace("PC history:\n");
     char buf[255];
     unsigned int pc = 0;
-    for (int i=0; i<M68K_PC_HISTORY_SIZE; i++) {
+    int start = (max > 0) ? std::max(0, M68K_PC_HISTORY_SIZE - max) : 0;
+    for (int i=start; i<M68K_PC_HISTORY_SIZE; i++) {
         pc = m68k_get_pc_history(M68K_PC_HISTORY_SIZE-i-1);
         if (pc==0) continue;
         if (mosCheckMemoryAccess(pc, 4, false)) {

@@ -37,6 +37,13 @@
 #include <assert.h>
 
 
+// Handle:
+// 8 bytes
+// 0: 4 bytes: ptr to user memory
+// 4: 2 bytes: flags
+// 6: 2 bytes: lock count
+
+
 // This is the emulated RAM.
 byte *MosMem;
 
@@ -428,16 +435,34 @@ unsigned int mosPtrSize(mosPtr mp)
 
 /**
  * Allocate memory and a master pointer and link them into the lists.
+ * In the original code, we have flags for sys memory and clear memory.
  * \note We could manage handles in blocks to make this more efficient.
  */
 mosHandle mosNewHandle(unsigned int size)
 {
     if (size==0)
         return 0;
+
     mosPtr mp = mosNewPtr(size);
-    mosPtr mh = mosMalloc(4);
+    if (!mp) {
+        return 0;
+    }
+
+    mosPtr mh = mosMalloc(8);
+    if (!mh) {
+        mosFree(mp);
+        return 0;
+    }
+
+    // Declare the block as a Handle for the memory manager
     mosWriteUnsafe32(mh-mosSizeofMemBlock+mosMemBlockFlags, mosMemFlagHandles);
-    mosWrite32(mh, mp);
+
+    // Initialize the Handle
+    mosWrite32(mh, mp);     // Pointer to the memory block
+    mosWrite16(mh+4, 0);    // Flags
+    mosWrite16(mh+6, 0);    // Lock Count
+
+    // Return the wonderful new Handle
     return (mosHandle)mh;
 }
 
@@ -487,17 +512,67 @@ void mosDisposeHandle(mosHandle hdl)
 /**
  * Get the pointer from the handle (locking is not implemented)
  */
-mosPtr mosHLock(mosHandle hdl) {
+mosPtr mosPtrFromHandle(mosHandle hdl) {
     return mosRead32(hdl);
 }
 
 /**
- * Unlock thae handle after use
+ * Mark a handle locked.
+ * \code
+ * void HLock(Handle h)
+ * \endcode
  */
-void mosHUnlock(mosHandle hdl) {
-    (void)hdl;
+void mosHLock(mosHandle hdl) {
+    uint16_t flags = mosRead16(hdl+4);
+    flags |= 0x80;
+    mosWrite16(hdl+4, flags);
 }
 
+/**
+ * Mark a handle unlocked.
+ * \code
+ * void HUnlock(Handle h)
+ * \endcode
+ */
+void mosHUnlock(mosHandle hdl) {
+    uint16_t flags = mosRead16(hdl+4);
+    flags &= ~0x80;
+    mosWrite16(hdl+4, flags);
+}
+
+/**
+ * Mark a handle purgeable.
+ * \code
+ * void HPurge(Handle h)
+ * \endcode
+ */
+void mosHPurge(mosHandle hdl) {
+    uint16_t flags = mosRead16(hdl+4);
+    flags |= 0x40;
+    mosWrite16(hdl+4, flags);
+}
+
+/**
+ * Mark a handle not purgeable.
+ * \code
+ * void HNoPurge(Handle h)
+ * \endcode
+ */
+void mosHNoPurge(mosHandle hdl) {
+    uint16_t flags = mosRead16(hdl+4);
+    flags &= ~0x40;
+    mosWrite16(hdl+4, flags);
+}
+
+uint16_t mosHGetState(mosHandle hdl)
+{
+    return mosRead16(hdl+4);
+}
+
+void mosHSetState(mosHandle hdl, uint16_t state)
+{
+    mosWrite16(hdl+4, state);
+}
 
 /**
  Return the handle that points to a relocatable block of memory.
