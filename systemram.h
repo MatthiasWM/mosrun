@@ -30,12 +30,13 @@
 extern unsigned int gMosCurrentA5;
 extern unsigned int gMosCurrentStackBase;
 extern unsigned int gMosCurJTOffset;
-extern unsigned int gMosResLoad;
+extern uint8_t gMosResLoad;
 extern unsigned int gMosSegHiEnable;
 extern unsigned int gMosResErr;
 extern unsigned int gMosMemErr;
 extern unsigned int gMosMPWHandle;
 
+extern uint16_t gMosCurApRefNum;    // 0x0900: Current application reference number
 extern uint16_t gMosACount;         // 0x0A9A:
 extern uint16_t gMosHWCfgFlags;     // 0x0B22: Basilisk test
 

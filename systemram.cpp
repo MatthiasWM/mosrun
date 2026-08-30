@@ -44,14 +44,14 @@ extern "C" {
 unsigned int gMosCurrentA5 = 0;
 unsigned int gMosCurrentStackBase = 0;
 unsigned int gMosCurJTOffset = 0;
-unsigned int gMosResLoad = 1;
+uint8_t gMosResLoad = 1;
 unsigned int gMosSegHiEnable = 0;
 unsigned int gMosResErr = 0;
 unsigned int gMosMPWHandle = 0;
 
+uint16_t gMosCurApRefNum = 0;       // 0x0900: Current application reference number
 uint16_t gMosACount = 0;            // 0x0A9A:
 uint16_t gMosHWCfgFlags = 0xec00;   // 0x0B22: Basilisk test
-
 
 unsigned int gMosMemErr = 0;
 
@@ -104,6 +104,7 @@ unsigned int m68k_read_memory_8(unsigned int address)
     switch (address) {
         case 0x012d: return 0; // LoadTrap [GLOBAL VAR]  trap before launch? [byte]
         case 0x0BB2: return gMosSegHiEnable; // SegHiEnable [GLOBAL VAR]  (byte) 0 to disable MoveHHi in LoadSeg
+        case 0x0A5E: return gMosResLoad;
         default:
             mosDebug("Reading unsupported RAM.b address 0x%08X from pc=0x%08X (CODE %s)\n",
                 address, m68k_get_reg(0L, M68K_REG_PC),
@@ -137,6 +138,7 @@ unsigned int m68k_read_memory_16(unsigned int address)
         case 0x0934: return gMosCurJTOffset; // offset from A5 to first entry in jump table
         case 0x0a60: return gMosResErr; // Resource Manager error code
         case 0x0220: return mosGetMemError();
+        case 0x0900: return gMosCurApRefNum;
         case 0x0930: return 0; // FIXME: SaveSegHandle [GLOBAL VAR]  seg 0 handle [handle]
         case 0x0B22: return gMosHWCfgFlags; // HWCfgFlags [GLOBAL VAR]  (word) hardware configuration flags
         default:

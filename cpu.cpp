@@ -87,7 +87,7 @@ void m68k_instruction_hook()
         // Trap the longjmp() call
         if (pc == codeOffsetToAddr(2, 0x006262)) {
             printf("Trapped longjmp() at PC: 0x%08X (%s)\n", pc, printAddr(pc));
-            mosDebugPrintPCHistory(8);
+            mosDebugPrintPCHistory();
             printf("");
         }
 
@@ -103,10 +103,10 @@ void m68k_instruction_hook()
         // }
 
         // Start trace when the PC reaches a specific address
-        if (pc == codeOffsetToAddr(1, 0x0009234)) {
-            trace = true;
-            //trace_max = 32; // Optional maximum number of traces after start
-        }
+        // if (pc == codeOffsetToAddr(1, 0x0009234)) {
+        //     trace = true;
+        //     //trace_max = 32; // Optional maximum number of traces after start
+        // }
 
         if (trace) {
             mosDebugPrintCPUState(1, 2, 4);

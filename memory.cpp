@@ -142,8 +142,10 @@ void mosFreeMemInfo(unsigned int *outTotal, unsigned int *outContig)
 
 mosPtr mosMalloc(uint size)
 {
-    // calculate the minimal block size we need to find
-    if (size==0) return 0;
+    // A request for 0 bytes still gets a real, unique, non-NIL pointer to a
+    // zero-length block -- that's what NewPtr(0)/NewHandle(0) do on real
+    // Mac OS, so callers can dereference it (nothing to read, but it's not
+    // a crash) and later grow it with SetHandleSize/SetPtrSize.
     MOS_CHECK_MEMORY_COHERENCE
     // align with 4 bytes
     uint32_t minimumBlockSize = ((size + 3) & ~0x00000003);
@@ -356,6 +358,7 @@ bool mosCheckMemoryCoherence()
 
 void mosMemcpy(mosPtr dst, mosPtr src, uint32_t n)
 {
+    if (n==0) return; // avoid a bogus range check below (address+0-1 underflows)
     if (gCheckMemory && !mosCheckMemoryAccess(src, n)) {
         mosWarning("Attempt to read %n bytes from illegal address 0x%08X!\n", n, src);
         assert(gCheckMemory<2);
@@ -373,6 +376,7 @@ void mosMemcpy(mosPtr dst, mosPtr src, uint32_t n)
 
 void mosMemcpy(void *hostDst, mosPtr src, uint32_t n)
 {
+    if (n==0) return;
     if (gCheckMemory && !mosCheckMemoryAccess(src, n)) {
         mosWarning("Attempt to read %n bytes from illegal address 0x%08X!\n", n, src);
         assert(gCheckMemory<2);
@@ -384,6 +388,7 @@ void mosMemcpy(void *hostDst, mosPtr src, uint32_t n)
 
 void mosMemcpy(mosPtr dst, const void *hostSrc, uint32_t n)
 {
+    if (n==0) return;
     if (gCheckMemory && !mosCheckMemoryAccess(dst, n)) {
         mosWarning("Attempt to write %n bytes to illegal address 0x%08X!\n", n, dst);
         assert(gCheckMemory<2);
@@ -440,9 +445,13 @@ unsigned int mosPtrSize(mosPtr mp)
  */
 mosHandle mosNewHandle(unsigned int size)
 {
-    if (size==0)
-        return 0;
-
+    // NewHandle(0) is legal and common (e.g. as a starting point before a
+    // series of SetHandleSize calls); it returns a valid handle whose
+    // master pointer references a real, zero-length block -- not a NIL
+    // handle. GetHandleSize on it correctly reports 0. The handle's state
+    // byte (see mosHGetState) is unrelated to size: it only tracks
+    // lock/purge/resource bits, all cleared here exactly like any other
+    // freshly allocated handle -- there is no separate "empty" flag.
     mosPtr mp = mosNewPtr(size);
     if (!mp) {
         return 0;
