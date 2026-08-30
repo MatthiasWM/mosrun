@@ -88,7 +88,8 @@
 //
 
 // NTK progress:
-// AUG/29/26 - 17:51 :   5'542'812 instructions executed, 185 trap calls dispatched
+// AUG/29/2026 - 17:51 :   5'542'812 instructions executed, 185 trap calls dispatched
+// AUG/31/2026 - 00:14 :   5'540'788 instructions executed, no more memory error ;-)
 // 00003168  4879 0000 02C0           push.l     0x2C0
 // 0000316E  A9F1                     syscall    UnloadSeg ***
 // label00003170:

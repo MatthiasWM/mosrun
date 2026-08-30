@@ -155,6 +155,37 @@ mosPtr gToolboxTrapTable = 0;
 mosPtr gOSTrapTable = 0;
 
 /**
+ * Count resources of a type.
+ * \code
+ * FUNCTION CountResources (theType: ResType): Integer;
+ * \endcode
+ *
+ * sp+8.l  = return value (number of items)
+ * sp+4.l  = rsrc
+ * sp.l    = return address
+ *
+ * \todo set gMosResErr as needed
+ */
+void trapCountResources(unsigned short )
+{
+    unsigned int sp   = m68k_get_reg(0L, M68K_REG_SP);
+
+    unsigned int ret  = mosRead32(sp); sp += 4;
+    unsigned int rsrc = m68k_read_memory_32(sp); sp+=4;
+
+    mosTrace("            CountResources('%c%c%c%c')\n",
+             rsrc>>24, rsrc>>16, rsrc>>8, rsrc);
+    unsigned int num_rsrcs = (unsigned int)CountResources(rsrc);
+
+    m68k_write_memory_32(sp, num_rsrcs);
+    sp-=4; m68k_write_memory_32(sp, ret);
+
+    m68k_set_reg(M68K_REG_SP, sp);
+    m68k_set_reg(M68K_REG_D0, 0);
+}
+
+
+/**
  * Load a resource using a fourCC code.
  *
  * sp+10.l = return value (handle to resource)
@@ -1783,6 +1814,8 @@ void mosSetupTrapTable()
     createGlue(0xA069, trapHGetState);
     createGlue(0xA06A, trapHSetState);
     createGlue(0xA055, trapStripAddress);
+    createGlue(0xA99C, trapCountResources);
+    createGlue(0xA80D, trapCountResources); // _Count1Resources
     createGlue(0xA9A0, trapGetResource);
     createGlue(0xA81F, trapGetResource); // _Get1Resource
     createGlue(0xA9A2, trapLoadResource);

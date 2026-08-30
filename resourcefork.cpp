@@ -182,6 +182,33 @@ void dumpResourceMap()
 
 }
 
+/**
+ * Count resources of a type.
+ * \code
+ * FUNCTION CountResources (theType: ResType): Integer;
+ * \endcode
+ * \param myResType The fourCC code of the resource type to count.
+ * \return The number of resources of the specified type.
+ */
+int CountResources(unsigned int myResType)
+{
+    unsigned int i = 0;
+    int result = 0;
+    // ---- read the map
+    unsigned int rsrcMapTypeList = m68k_read_memory_16((unsigned int)(theRsrc+24));
+    // ------ resource map type list
+    unsigned int rsrcMapTypeListSize = m68k_read_memory_16((unsigned int)(theRsrc+rsrcMapTypeList)) + 1;
+    for (i=0; i<rsrcMapTypeListSize; i++) {
+        unsigned int nRes = m68k_read_memory_16((unsigned int)(theRsrc+rsrcMapTypeList+8*i+6)) + 1;
+        unsigned int resType = m68k_read_memory_32((unsigned int)(theRsrc+rsrcMapTypeList+8*i+2));
+        if (resType==myResType) {
+            result = nRes;
+        }
+    }
+    mosDebug("Resource '%c%c%c%c', %d items found!\n",
+            myResType>>24, myResType>>16, myResType>>8, myResType, result);
+    return result;
+}
 
 /**
  * pascal Handle GetResource    (ResType theType, short theID);

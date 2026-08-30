@@ -54,6 +54,7 @@ extern mosPtr gMosA5WorldEnd;
 
 
 void dumpResourceMap();
+int CountResources(unsigned int myResType);
 mosHandle GetResource(unsigned int myResType, unsigned short myId);
 mosHandle GetNamedResource(unsigned int myResType, const byte *pName);
 unsigned int createA5World(mosHandle hCode0);
