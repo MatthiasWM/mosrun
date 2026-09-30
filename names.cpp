@@ -25,13 +25,6 @@
 
 #include <stdio.h>
 
-const char* gToolboxTrapName[kToolboxTrapTableSize] = { // 1024
-
-}; // gToolboxTrapName
-
-const char* gOSTrapName[kOSTrapTableSize] = { // 256
-}; // gOSTrapName
-
 typedef struct {
     unsigned int id;
     const char *name;

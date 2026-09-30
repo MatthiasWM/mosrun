@@ -19,11 +19,17 @@
  The latest source code can be found at https://github.com/MatthiasWM/mosrun
  */
 
-
-//#define MOS_CHECK_MEMORY_COHERENCE mosCheckMemoryCoherence();
+#ifdef NDEBUG
 #define MOS_CHECK_MEMORY_COHERENCE
-//#define MOS_TRACE_MEMORY(a) a
 #define MOS_TRACE_MEMORY(a)
+#else
+#define MOS_CHECK_MEMORY_COHERENCE \
+    if (mosCheckMemoryCoherence()==false) {\
+        mosDebugPrintPCHistory(32);\
+        debug_break();\
+    }
+#define MOS_TRACE_MEMORY(a) a
+#endif
 
 #include "memory.h"
 #include "log.h"
@@ -154,6 +160,7 @@ mosPtr mosMalloc(uint size)
     for (;;) {
         mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
         if (next==0) {
+            mosCheckMemoryCoherence();
             fprintf(stderr, "MOSMalloc failed: out of memory\n");
             assert(0);
         }
@@ -190,6 +197,79 @@ mosPtr mosMalloc(uint size)
         b = next;
     }
 }
+
+/**
+ Allocate memory as high in the emulated heap as possible.
+
+ Like mosMalloc, but instead of taking the *first* free block that fits, it
+ scans the whole free list and uses the *last* (i.e. highest-addressed) free
+ block that fits, then carves the new block off the high-address end of that
+ free block rather than the low end -- so the returned pointer sits as close
+ to the top of RAM as the current free space allows. Any leftover free space
+ stays behind at the low-address side of that same free block, so the free
+ list's node for it does not move.
+
+ Intended for things like MoveHHi, where real Mac OS relocates a block to
+ the top of the heap zone to keep it out of the way of the bulk of the heap
+ that grows from the bottom.
+ */
+mosPtr mosMallocHigh(uint size)
+{
+    MOS_CHECK_MEMORY_COHERENCE
+    // align with 4 bytes
+    uint32_t minimumBlockSize = ((size + 3) & ~0x00000003);
+
+    // find the highest-addressed free block that is big enough
+    mosPtr best = 0;
+    mosPtr b = mosMemBlockStart;
+    for (;;) {
+        mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
+        if (next==0) break; // reached the last block
+        uint32_t flags = mosReadUnsafe32(b+mosMemBlockFlags);
+        if (flags==mosMemFlagFree) {
+            uint32_t availableBlockSize = mosReadUnsafe32(b+mosMemBlockSize);
+            if (availableBlockSize==minimumBlockSize
+                || availableBlockSize>minimumBlockSize+mosSizeofMemBlock) {
+                best = b; // keep looking -- a later (higher) match wins
+            }
+        }
+        b = next;
+    }
+
+    if (!best) {
+        fprintf(stderr, "mosMallocHigh failed: out of memory\n");
+        assert(0);
+    }
+
+    uint32_t availableBlockSize = mosReadUnsafe32(best+mosMemBlockSize);
+    mosPtr next = mosReadUnsafe32(best+mosMemBlockNext);
+
+    if (availableBlockSize==minimumBlockSize) {
+        // the size matches exactly; just mark it used and return its address
+        mosWriteUnsafe32(best+mosMemBlockFlags, mosMemFlagUsed);
+        MOS_TRACE_MEMORY( printf("-- mallocHigh match at 0x%08X, n=%d\n", best+mosSizeofMemBlock, size); )
+        MOS_CHECK_MEMORY_COHERENCE
+        return best+mosSizeofMemBlock;
+    } else {
+        // carve the new block off the high end of the free block: the new
+        // block's header sits right before `next`, and `best` shrinks in
+        // place to cover whatever remains at the low end
+        mosPtr c = next - mosSizeofMemBlock - minimumBlockSize;
+        mosWriteUnsafe32(c+mosMemBlockPrev, best);
+        mosWriteUnsafe32(c+mosMemBlockNext, next);
+        mosWriteUnsafe32(c+mosMemBlockSize, size);
+        mosWriteUnsafe32(c+mosMemBlockFlags, mosMemFlagUsed);
+        // shrink the original free block to end where the new block begins
+        mosWriteUnsafe32(best+mosMemBlockNext, c);
+        mosWriteUnsafe32(best+mosMemBlockSize, c-best-mosSizeofMemBlock);
+        // update the block after the new block
+        mosWriteUnsafe32(next+mosMemBlockPrev, c);
+        MOS_TRACE_MEMORY( printf("-- mallocHigh split at 0x%08X, n=%d\n", c+mosSizeofMemBlock, size); )
+        MOS_CHECK_MEMORY_COHERENCE
+        return c+mosSizeofMemBlock;
+    }
+}
+
 
 void mosJoinBlocks(mosPtr b)
 {
@@ -324,36 +404,37 @@ bool mosCheckMemoryAccess(mosPtr address, uint32_t size, bool verbose)
  */
 bool mosCheckMemoryCoherence()
 {
+    bool ret = true;
     mosPtr b = mosMemBlockStart;
     if (mosReadUnsafe32(b+mosMemBlockPrev)!=0)
-        mosError("mosCheckMemoryCoherency: firstBlock.prev is not NULL!\n");
+        mosError("mosCheckMemoryCoherency: firstBlock.prev is not NULL!\n"), ret = false;
     if (mosReadUnsafe32(b+mosMemBlockNext)==0)
-        mosError("mosCheckMemoryCoherency: firstBlock.next must not be NULL!\n");
+        mosError("mosCheckMemoryCoherency: firstBlock.next must not be NULL!\n"), ret = false;
     for (;;) {
         mosPtr next = mosReadUnsafe32(b+mosMemBlockNext);
         if (next==0) break; // this must be the final mem block
         if (mosReadUnsafe32(next+mosMemBlockPrev)!=b)
-            mosError("mosCheckMemoryCoherency: block.next.first must point back at block!\n");
+            mosError("mosCheckMemoryCoherency: block.next.first must point back at block!\n"), ret = false;
         uint32_t bFlags = mosReadUnsafe32(b+mosMemBlockFlags);
         if ( (bFlags&mosMemFlagMagicMask) != mosMemFlagMagic)
-            mosError("mosCheckMemoryCoherency: missing magic value at 0x%08X\n", b+mosSizeofMemBlock);
+            mosError("mosCheckMemoryCoherency: missing magic value at 0x%08X\n", b+mosSizeofMemBlock), ret = false;
         uint32_t nFlags = mosReadUnsafe32(next+mosMemBlockFlags);
         if (bFlags==mosMemFlagFree && nFlags==mosMemFlagFree)
-            mosError("mosCheckMemoryCoherency: a free block must not be followed by another free block!\n");
+            mosError("mosCheckMemoryCoherency: a free block must not be followed by another free block!\n"), ret = false;
         uint32_t bSize = mosReadUnsafe32(b+mosMemBlockSize);
         if (bFlags==mosMemFlagFree && b+mosSizeofMemBlock+bSize!=next)
-            mosError("mosCheckMemoryCoherency: free block has illegal block size!\n");
+            mosError("mosCheckMemoryCoherency: free block has illegal block size!\n"), ret = false;
         if (bFlags==mosMemFlagUsed && b+mosSizeofMemBlock+bSize>next)
-            mosError("mosCheckMemoryCoherency: used block has illegal block size!\n");
-        if (bFlags==mosMemFlagHandles && (b+mosSizeofMemBlock+bSize!=next || bSize!=4))
-            mosError("mosCheckMemoryCoherency: handle block has illegal block size!\n");
+            mosError("mosCheckMemoryCoherency: used block has illegal block size!\n"), ret = false;
+        if (bFlags==mosMemFlagHandles && (b+mosSizeofMemBlock+bSize!=next || bSize!=8))
+            mosError("mosCheckMemoryCoherency: handle block has illegal block size!\n"), ret = false;
         b = next;
     }
     if (mosReadUnsafe32(b+mosMemBlockFlags)!=mosMemFlagLast)
-        mosError("mosCheckMemoryCoherency: lastBlock.flagsa must indicate last block\n");
+        mosError("mosCheckMemoryCoherency: lastBlock.flagsa must indicate last block\n"), ret = false;
     if (b!=kMosMemMax-mosSizeofMemBlock)
-        mosError("mosCheckMemoryCoherency: lastBlock at unexpected address\n");
-    return true;
+        mosError("mosCheckMemoryCoherency: lastBlock at unexpected address\n"), ret = false;
+    return ret;
 }
 
 void mosMemcpy(mosPtr dst, mosPtr src, uint32_t n)
@@ -434,6 +515,7 @@ void mosDisposePtr(mosPtr mp)
  */
 unsigned int mosPtrSize(mosPtr mp)
 {
+    if (mp==0) return 0;
     return mosReadUnsafe32(mp-mosSizeofMemBlock+mosMemBlockSize);
 }
 
@@ -445,15 +527,23 @@ unsigned int mosPtrSize(mosPtr mp)
  */
 mosHandle mosNewHandle(unsigned int size)
 {
+    MOS_TRACE_MEMORY( printf("NewHandle(%u)\n", size); )
     // NewHandle(0) is legal and common (e.g. as a starting point before a
-    // series of SetHandleSize calls); it returns a valid handle whose
-    // master pointer references a real, zero-length block -- not a NIL
-    // handle. GetHandleSize on it correctly reports 0. The handle's state
-    // byte (see mosHGetState) is unrelated to size: it only tracks
+    // series of SetHandleSize calls). Unlike NewPtr(0) -- which has no
+    // indirection to fall back on and so must return a real (if useless)
+    // non-NIL address -- a Handle already has a stable identity separate
+    // from the data it points to, so we represent "empty" the same way
+    // EmptyHandle() does: a valid, non-NIL handle whose master pointer is
+    // NIL. GetHandleSize/DisposeHandle already guard on `if (ptr)` before
+    // touching the target, so a NIL-pointer handle is a state this code
+    // already treats as first-class. The handle's state byte (see
+    // mosHGetState) is unrelated to size either way -- it only tracks
     // lock/purge/resource bits, all cleared here exactly like any other
-    // freshly allocated handle -- there is no separate "empty" flag.
-    mosPtr mp = mosNewPtr(size);
-    if (!mp) {
+    // freshly allocated handle.
+
+    mosPtr mp = size ? mosNewPtr(size) : 0;
+    // mosPtr mp = mosNewPtr(size);
+    if (size && !mp) {
         return 0;
     }
 
@@ -481,27 +571,55 @@ mosHandle mosNewHandle(unsigned int size)
  */
 int mosSetHandleSize(mosHandle hdl, unsigned int newSize)
 {
-    // get the old allocation data
+    // get the old allocation data -- a NIL master pointer (an empty
+    // handle, see mosNewHandle) has no block to read a size from
     mosPtr oldPtr = mosRead32(hdl);
-    unsigned int oldSize = mosPtrSize(oldPtr);
+    unsigned int oldSize = oldPtr ? mosPtrSize(oldPtr) : 0;
 
     if (newSize==oldSize)
         return 0;
 
-    // allocate a new block
-    mosPtr newPtr = mosMalloc(newSize);
+    // allocate a new block, unless shrinking to empty -- same convention
+    // as mosNewHandle(0): a 0-byte handle is a NIL master pointer, not a
+    // real, useless zero-length block
+    mosPtr newPtr = newSize ? mosMalloc(newSize) : 0;
     mosWrite32(hdl, newPtr);
 
     // copy the old contents over
     unsigned int size = (newSize<oldSize)?newSize:oldSize;
     mosMemcpy(newPtr, oldPtr, size);
 
-    // free the old allocation
-    mosFree(oldPtr);
+    // free the old allocation, if there was one
+    if (oldPtr) mosFree(oldPtr);
 
     return 0;
 }
 
+/**
+ * Empty the memory allocation that a handle points to.
+ * \code
+ * PROCEDURE EmptyHandle (h: Handle);
+ * \endcode
+ * \param hdl Handle to empty.
+ */
+void mosEmptyHandle(mosHandle hdl)
+{
+    if (!hdl) return;
+
+    mosPtr ptr = mosRead32(hdl);
+    if (ptr) {
+        mosFree(ptr);
+        mosWrite32(hdl, 0);
+    }
+}
+
+/**
+ * Reallocate the memory block that a handle points to.
+ */
+void mosReallocHandle(mosHandle hdl, unsigned int newSize)
+{
+    mosSetHandleSize(hdl, newSize);
+}
 
 /**
  * Free memory and its master pointer.

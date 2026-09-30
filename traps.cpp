@@ -173,9 +173,9 @@ void trapCountResources(unsigned short )
     unsigned int ret  = mosRead32(sp); sp += 4;
     unsigned int rsrc = m68k_read_memory_32(sp); sp+=4;
 
-    mosTrace("            CountResources('%c%c%c%c')\n",
-             rsrc>>24, rsrc>>16, rsrc>>8, rsrc);
     unsigned int num_rsrcs = (unsigned int)CountResources(rsrc);
+    mosDebug("            CountResources('%c%c%c%c'): %d found (file %d)\n",
+             rsrc>>24, rsrc>>16, rsrc>>8, rsrc, num_rsrcs, CurResFile());
 
     m68k_write_memory_32(sp, num_rsrcs);
     sp-=4; m68k_write_memory_32(sp, ret);
@@ -414,6 +414,41 @@ void trapSetHandleSize(unsigned short)
     m68k_set_reg(M68K_REG_D0, ret);
 }
 
+/**
+ * [A02B] Empty the memory allocation that we point to.
+ *
+ * A0 = handle
+ * \return result code in D0
+ */
+void trapEmptyHandle(unsigned short)
+{
+    unsigned int hdl = m68k_get_reg(0L, M68K_REG_A0);
+
+    unsigned int ptr = hdl?m68k_read_memory_32(hdl):0;
+    mosTrace("            EmptyHandle(0x%08X(->0x%08X))\n", hdl, ptr);
+    mosEmptyHandle(hdl);
+
+    m68k_set_reg(M68K_REG_A0, hdl);
+    m68k_set_reg(M68K_REG_D0, 0);
+}
+
+/**
+ * [A027] Reallocate the handle's memory allocation
+ *
+ * A0 = handle
+ * D0 = new size
+ * \return result code in D0
+ */
+void trapReallocHandle(unsigned short)
+{
+    unsigned int hdl  = m68k_get_reg(0L, M68K_REG_A0);
+    unsigned int size = m68k_get_reg(0L, M68K_REG_D0);
+    //unsigned int ret = 0;
+
+    mosReallocHandle(hdl, size);
+
+    //m68k_set_reg(M68K_REG_D0, ret);
+}
 
 /**
  * Free the memory that was allocated with NewPtr().
@@ -433,6 +468,13 @@ void trapDisposePtr(unsigned short)
     m68k_set_reg(M68K_REG_D0, 0);
 }
 
+/**
+ * Memory Management Stuff.
+ */
+void trapSetGrowZone(unsigned short)
+{
+    // A0: callback function to rearrange RAM if it gets sparse
+}
 
 /**
  * Free the master pointer and the memory that was allocated with NewHandle().
@@ -947,7 +989,8 @@ void trapCurResFile(unsigned short )
 
     unsigned int ret  = m68k_read_memory_32(sp); sp += 4;
 
-    m68k_write_memory_16(sp, 1);  // my resource ID
+    uint32_t crf = CurResFile();
+    m68k_write_memory_16(sp, crf);  // my resource ID
     sp-=4; m68k_write_memory_32(sp, ret);
 
     m68k_set_reg(M68K_REG_SP, sp);
@@ -957,6 +1000,9 @@ void trapCurResFile(unsigned short )
 
 /**
  * [A99B] Set the gMosResLoad flag.
+ * \code
+ * PROCEDURE SetResLoad (load: Boolean);
+ * \endcode
  *
  * sp+4.w  = flag
  * sp.l    = return address
@@ -1527,15 +1573,18 @@ void trapUseResFile(unsigned short /* instr */) // A998
     mosPtr ret = m68k_read_memory_32(sp); sp+=4; // pop the return address
     uint16_t refNum = m68k_read_memory_16(sp); sp+=2; // pop the refNum
 
-    mosDebug("UseResFile: refNum=%u\n", refNum);
-    if (refNum != 1) {
-        printf("UseResFile: refNum=%u is not 1, not supported\n", refNum);
-    }
+    UseResFile(refNum);
+    // TODO: ResErr
+    // mosDebug("UseResFile: refNum=%u\n", refNum);
+    // if (refNum != 1) {
+    //     printf("UseResFile: refNum=%u is not 1, not supported\n", refNum);
+    // }
 
     sp -= 4; m68k_write_memory_32(sp, ret);
     m68k_set_reg(M68K_REG_SP, sp);
 
 }
+
 /**
  * Handle the _HWPriv trap.
  */
@@ -1544,6 +1593,25 @@ void trapHWPriv(unsigned short /* instr */) // A198
     //uint16_t selector = m68k_get_reg(0L, M68K_REG_D0);
     //mosDebug("_HWPriv trap invoked (selector = %d)\n", selector);
     m68k_set_reg(M68K_REG_D0, 0); // Pretend we did it!
+}
+
+/**
+ * Handle the MaxApplZone trap.
+ * \code
+ * PROCEDURE MaxApplZone;
+ * \endcode
+ */
+void trapMaxApplZone(unsigned short /* instr */) // A063
+{
+    //mosDebug("MaxApplZone trap invoked (selector = %d)\n", selector);
+}
+
+/**
+ * Get more space for handles.
+ */
+void trapMoreMasters(unsigned short /* instr */) // A036
+{
+    //mosDebug("_MoreMasters trap invoked\n");
 }
 
 /**
@@ -1728,8 +1796,8 @@ void mosSetupTrapTable()
     // InitZone
     // GetApplLimit
     // SetAppleLimit
-    // MaxApplZone
-    // MoreMasters
+    createGlue(0xA063, trapMaxApplZone);
+    createGlue(0xA036, trapMoreMasters); // _MoreMasters
 
     // -- Heap Zone Access
 
@@ -1744,9 +1812,10 @@ void mosSetupTrapTable()
     createGlue(0xA023, trapDisposeHandle);
     createGlue(0xA025, trapGetHandleSize);
     createGlue(0xA024, trapSetHandleSize);
+    createGlue(0xA02B, trapEmptyHandle);
+    createGlue(0xA027, trapReallocHandle);
     // HandleZone
     createGlue(0xA128, trapRecoverHandle);
-    // ReallocHandle
 
     // -- Allocating and Releasing Nonrelocatable Blocks
 
@@ -1777,7 +1846,7 @@ void mosSetupTrapTable()
 
     // -- Grow Zone Operations
 
-    // SetGrowZone
+    createGlue(0xA04B, trapSetGrowZone);
     // GZSaveHnd
 
     // -- Misc

@@ -33,7 +33,7 @@
                 "build/VSCode",
                 "-S",
                 ".",
-                "-DCMAKE_BUILD_TYPE=Debug"
+                "-DCMAKE_BUILD_TYPE=Release"
             ],
             "group": "build",
             "presentation": {

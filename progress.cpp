@@ -35,32 +35,41 @@ extern "C" {
 }
 
 
+#ifndef NDEBUG
 // Print a heartbeat every this many retired instructions, so a run that is
 // actually progressing shows an ever-advancing PC, while a run stuck in a
 // tight loop shows the same handful of addresses over and over.
 static const uint64_t kHeartbeatInterval = 1'000'000;
+#endif
 
 // How many of the most recently dispatched traps to remember for the
 // postmortem report.
-static const int kRecentTrapSlots = 64;
+static const int kRecentTrapSlots = 32;
 
 struct RecentTrap {
+#ifndef NDEBUG
     uint64_t atInstruction = 0;
+#endif
     uint16_t trap = 0;
     mosPtr callerPC = 0;
 };
 
+#ifndef NDEBUG
 static uint64_t gInstructionCount = 0;
+static uint64_t gHeartbeatCountdown = kHeartbeatInterval;
+#endif
 static uint64_t gTrapCount = 0;
 static RecentTrap gRecentTraps[kRecentTrapSlots];
 static int gRecentTrapNext = 0;
 static std::unordered_map<uint16_t, uint32_t> gTrapFrequency;
 
 
+#ifndef NDEBUG
 void mosProgressInstruction()
 {
     gInstructionCount++;
-    if (gInstructionCount % kHeartbeatInterval == 0) {
+    if (--gHeartbeatCountdown == 0) {
+        gHeartbeatCountdown = kHeartbeatInterval;
         mosPtr pc = m68k_get_reg(0L, M68K_REG_PC);
         mosLog("progress: %llu instructions, %llu trap calls, pc=0x%08X (%s)\n",
                (unsigned long long)gInstructionCount,
@@ -68,6 +77,7 @@ void mosProgressInstruction()
                pc, printAddr(pc));
     }
 }
+#endif
 
 
 void mosProgressTrap(uint16_t trap)
@@ -76,17 +86,21 @@ void mosProgressTrap(uint16_t trap)
     gTrapFrequency[trap]++;
 
     RecentTrap &slot = gRecentTraps[gRecentTrapNext];
+#ifndef NDEBUG
     slot.atInstruction = gInstructionCount;
+#endif
     slot.trap = trap;
     slot.callerPC = REG_PPC; //m68k_get_reg(0L, M68K_REG_PC);
     gRecentTrapNext = (gRecentTrapNext + 1) % kRecentTrapSlots;
 }
 
 
+#ifndef NDEBUG
 uint64_t mosProgressInstructionCount()
 {
     return gInstructionCount;
 }
+#endif
 
 
 uint64_t mosProgressTrapCount()
@@ -99,19 +113,30 @@ void mosProgressReport()
 {
     mosPtr pc = m68k_get_reg(0L, M68K_REG_PC);
     mosLog("--- progress report ---\n");
+#ifndef NDEBUG
     mosLog("%llu instructions executed, %llu trap calls dispatched, pc=0x%08X (%s)\n",
            (unsigned long long)gInstructionCount,
            (unsigned long long)gTrapCount,
            pc, printAddr(pc));
+#else
+    mosLog("%llu trap calls dispatched, pc=0x%08X (%s)\n",
+           (unsigned long long)gTrapCount,
+           pc, printAddr(pc));
+#endif
 
     mosLog("recently called traps (oldest first):\n");
     for (int i = 0; i < kRecentTrapSlots; i++) {
         const RecentTrap &slot = gRecentTraps[(gRecentTrapNext + i) % kRecentTrapSlots];
-        if (slot.atInstruction == 0 && slot.trap == 0 && slot.callerPC == 0)
+        if (slot.trap == 0 && slot.callerPC == 0)
             continue;
+#ifndef NDEBUG
         mosLog("  instr #%llu: 0x%04X %s, called from %s\n",
                (unsigned long long)slot.atInstruction,
                slot.trap, trapName(slot.trap), printAddr(slot.callerPC));
+#else
+        mosLog("  0x%04X %s, called from %s\n",
+               slot.trap, trapName(slot.trap), printAddr(slot.callerPC));
+#endif
     }
 
     std::vector<std::pair<uint16_t, uint32_t>> byFrequency(gTrapFrequency.begin(), gTrapFrequency.end());

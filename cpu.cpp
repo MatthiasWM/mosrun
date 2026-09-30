@@ -59,6 +59,17 @@ void m68k_instruction_hook()
     char buf[2048];
     char functionName[257];
     mosProgressInstruction();
+#ifdef NDEBUG
+    // Fast path: only A-line instructions, pending breakpoints, and tracing
+    // need the full treatment below. Everything else just executes.
+    {
+        mosPtr pc = REG_PC;
+        if (pc >= kSystemHeapStart && pc < kMosMemMax && !gPendingBreakpoint
+            && (MosMem[pc] & 0xF0) != 0xA0 && mosLogVerbosity() < MOS_VERBOSITY_TRACE) {
+            return;
+        }
+    }
+#endif
     for (;;) {
         gPendingBreakpoint = 0L;
     afterBreakpoint:
@@ -70,6 +81,10 @@ void m68k_instruction_hook()
         }
         uint16_t instr = m68k_read_memory_16(pc);
 
+#ifndef NDEBUG
+        if (instr == 0xa948) {
+            printf("Instruction 0xa948 at PC: 0x%08X\n", pc);
+        }
         // static uint32_t xxx = 0xdead;
         // uint32_t yyy = m68k_read_memory_32(40572+4*497);
         // if (xxx != yyy) {
@@ -96,15 +111,20 @@ void m68k_instruction_hook()
         // }
 
         // Trace a range of addresses, don't trace outside of this range
-        // if (pc >= codeOffsetToAddr(70, 0x1a) && pc <= codeOffsetToAddr(70, 0x000128)) {
+        // if (pc >= codeOffsetToAddr(78, 0x356) && pc <= codeOffsetToAddr(78, 0x542)) {
         //     mosDebugPrintCPUState(1, 1, 1);
         //     //trace = true; //trace_max = 4;
         //     int x = 3;
         // }
 
         // Start trace when the PC reaches a specific address
-        // if (pc == codeOffsetToAddr(1, 0x0009234)) {
+        // if (pc == codeOffsetToAddr(78, 0x356)) {
         //     trace = true;
+        //     //trace_max = 32; // Optional maximum number of traces after start
+        // }
+        // Stop trace when the PC reaches a specific address
+        // if (pc == codeOffsetToAddr(78, 0x542)) {
+        //     trace = false;
         //     //trace_max = 32; // Optional maximum number of traces after start
         // }
 
@@ -116,7 +136,7 @@ void m68k_instruction_hook()
                     trace = false;
                 }
             }
-            int x =3;
+            //int x =3;
         }
 
         // if (pc == codeOffsetToAddr(1, 0x326)) {
@@ -132,6 +152,7 @@ void m68k_instruction_hook()
         // if (pc == codeOffsetToAddr(1, 0x00924A)) {
         //     trace = false;
         // }
+#endif
 
 #if 0 // leaving this code in here if I need to trace the stack again
         static bool trace = false;
@@ -153,7 +174,7 @@ void m68k_instruction_hook()
         }
         if (pc >= 0x003F1160 && pc < 0x003F1160 + 0x0000015C) {
             char buf[255];
-            m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+            mosDisassemble(buf, pc, M68K_CPU_TYPE_68020);
             mosDebug("sp: 0x%08x -> ", m68k_get_reg(0L, M68K_REG_SP));
             mosDebug("%s: %s\n", printAddr(pc), buf);
         }
@@ -170,7 +191,7 @@ void m68k_instruction_hook()
                 }
                 mosTraceRegisters();
             }
-            m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+            mosDisassemble(buf, pc, M68K_CPU_TYPE_68020);
             if ( (instr & 0xf000) == 0xa000 ) {
                 mosTrace("0x%s: %s (%s)\n", printAddr(pc), buf, trapName(instr));
             } else {
@@ -295,3 +316,16 @@ bool findFunctionName(mosPtr pc, char *outFunName)
         return false;
     }
 }
+
+unsigned int mosDisassemble(char* str_buff, unsigned int pc, unsigned int cpu_type)
+{
+    uint16_t instr = m68k_read_memory_16(pc);
+    unsigned int ret = 0;
+    if ((instr & 0xF000) == 0xA000) { // Check for A Trap
+        snprintf(str_buff, 64, "a-line  $%04X; %s", instr, trapName(instr));
+    } else {
+        ret = m68k_disassemble(str_buff, pc, cpu_type);
+    }
+    return ret;
+}
+

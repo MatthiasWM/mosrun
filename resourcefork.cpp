@@ -1,6 +1,6 @@
 /*
  mosrun - the MacOS MPW runtime emulator
- Copyright (C) 2013  Matthias Melcher
+ Copyright (C) 2013-2026  Matthias Melcher
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
  The author can be contacted at mosrun AT matthiasm DOT com.
- The latest source code can be found at http://code.google.com/p/dynee5/
+ The latest source code can be found at https://github.com/MatthiasWM/mosrun
  */
 
 #include "resourcefork.h"
@@ -24,7 +24,9 @@
 #include "memory.h"
 #include "breakpoints.h"
 #include "log.h"
+#include "cpu.h"
 #include "systemram.h"
+#include "system_rsrc.h"
 
 #include <string.h>
 
@@ -38,6 +40,26 @@ std::map<int, CodeSegmentInfo> gCodeSegments;
 mosPtr gMosA5WorldStart = 0;
 mosPtr gMosA5WorldEnd = 0;
 
+mosPtr theRsrc = 0;
+uint32_t theRsrcSize = 0;
+uint16_t gMosCurResFile = 0;
+
+std::vector<ResourceInfo> gResources;
+
+
+
+void InitResourceManager()
+{
+    // Set up a minimal system resource map here.
+    gResources.clear();
+    gResources.reserve(10);
+    // App resource map will be added later.
+    theRsrc = mosNewPtr(system_rsrc_size);
+    theRsrcSize = system_rsrc_size;
+    mosMemcpy(theRsrc, system_rsrc_data, system_rsrc_size);
+    gResources.push_back(ResourceInfo{theRsrc, theRsrcSize});
+    // Initialize the system resource map.
+}
 
 /**
  * Record (or update) the byte range of a loaded 'CODE' resource, for
@@ -112,11 +134,11 @@ void printPCHistory()
     for (int i=0; i<M68K_PC_HISTORY_SIZE; i++) {
         pc = m68k_get_pc_history(M68K_PC_HISTORY_SIZE-i-1);
         if (pc==0) continue;
-        m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+        mosDisassemble(buf, pc, M68K_CPU_TYPE_68020);
         mosDebug("  %4d: 0x%08X %16s %s\n", M68K_PC_HISTORY_SIZE-i, pc, printAddr(pc), buf);
     }
     pc = m68k_get_reg(0L, M68K_REG_PC);
-    m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+    mosDisassemble(buf, pc, M68K_CPU_TYPE_68020);
     mosDebug("  %4d: 0x%08X %16s %s\n", 0, pc, printAddr(pc), buf);
 #endif
 }
@@ -183,6 +205,28 @@ void dumpResourceMap()
 }
 
 /**
+ * Return the ID of the currently selected Resource Map.
+ */
+uint16_t CurResFile()
+{
+    return gMosCurResFile;
+}
+
+/**
+ * Set the index of the Resource Map to use.
+ */
+void UseResFile(uint16_t refNum)
+{
+    if (refNum < gResources.size()) {
+        gMosCurResFile = refNum;
+        theRsrc = gResources[gMosCurResFile].start;
+        theRsrcSize = gResources[gMosCurResFile].size;
+    } else {
+        mosError("UseResFile: refNum=%u is out of range\n", refNum);
+    }
+}
+
+/**
  * Count resources of a type.
  * \code
  * FUNCTION CountResources (theType: ResType): Integer;
@@ -205,8 +249,8 @@ int CountResources(unsigned int myResType)
             result = nRes;
         }
     }
-    mosDebug("Resource '%c%c%c%c', %d items found!\n",
-            myResType>>24, myResType>>16, myResType>>8, myResType, result);
+    // mosDebug("Resource '%c%c%c%c', %d items found!\n",
+    //         myResType>>24, myResType>>16, myResType>>8, myResType, result);
     return result;
 }
 
@@ -401,6 +445,9 @@ void readResourceMap()
     theRsrc = mosNewPtr(rsrcMapSize);
     theRsrcSize = rsrcMapSize;
     mosMemcpy(theRsrc, theApp+rsrcMap, rsrcMapSize);
+    gResources.push_back(ResourceInfo{theRsrc, theRsrcSize});
+    UseResFile(gResources.size() - 1);
+    gMosCurResFile = gResources.size() - 1;
     dumpResourceMap();
 }
 

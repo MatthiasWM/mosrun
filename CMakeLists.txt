@@ -1,6 +1,25 @@
 cmake_minimum_required (VERSION 3.16)
 project (mosrun)
 
+# Default to an optimized Release build (which defines NDEBUG and disables all
+# tracing) unless a build type was explicitly requested.
+get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(NOT isMultiConfig AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release MinSizeRel RelWithDebInfo)
+endif()
+
+# Link-time optimization lets the compiler inline the emulator's memory access
+# callbacks across source files, which matters for every emulated instruction.
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipoSupported OUTPUT ipoError LANGUAGES C CXX)
+if(ipoSupported)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON)
+else()
+  message(STATUS "LTO not supported: ${ipoError}")
+endif()
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -30,5 +30,8 @@ extern "C" {
 void m68k_instruction_hook();
 }
 
+unsigned int mosDisassemble(char* str_buff, unsigned int pc, unsigned int cpu_type);
+
+
 
 #endif

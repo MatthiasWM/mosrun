@@ -58,6 +58,8 @@ unsigned int mosReadUnsafe32(mosPtr addr);
 unsigned short mosReadUnsafe16(mosPtr addr);
 unsigned char mosReadUnsafe8(mosPtr addr);
 
+mosPtr mosMallocHigh(uint size);
+
 mosPtr mosNewPtr(unsigned int size);
 mosPtr mosNewPtr(const char *text);
 void mosDisposePtr(mosPtr);
@@ -74,6 +76,8 @@ void mosHSetState(mosHandle hdl, uint16_t state);
 
 mosHandle mosRecoverHandle(mosPtr);
 int mosSetHandleSize(mosHandle, unsigned int);
+void mosEmptyHandle(mosHandle hdl);
+void mosReallocHandle(mosHandle hdl, unsigned int newSize);
 mosPtr mosPtrFromHandle(mosHandle h);
 
 unsigned int mosCheckBounds(mosPtr, unsigned int size);

@@ -157,10 +157,12 @@ const char *gMosHelpText =
 
 mosPtr theApp = 0;
 unsigned int theAppSize = 0;
-mosPtr theRsrc = 0;
-unsigned int theRsrcSize = 0;
 mosPtr theJumpTable = 0;
+#ifdef NDEBUG
 byte gCheckMemory = 0;
+#else
+byte gCheckMemory = 2;
+#endif
 
 byte gFilterStdoutDataFrom = MOS_TYPE_MAC;
 byte gFilterStdoutDataTo   = MOS_TYPE_UNIX;
@@ -324,8 +326,8 @@ int runApp()
     m68k_pulse_reset();
     m68k_set_cpu_type(M68K_CPU_TYPE_68020);
     m68k_set_reg(M68K_REG_PC, gMosCurrentA5 + gMosCurJTOffset + 2);
-    m68k_write_memory_32(gMosCurrentStackBase-4, gTrapExitAppStub); // end of app
-    m68k_set_reg(M68K_REG_SP, gMosCurrentStackBase-4);
+    m68k_write_memory_32(gMosCurStackBase-4, gTrapExitAppStub); // end of app
+    m68k_set_reg(M68K_REG_SP, gMosCurStackBase-4);
     m68k_set_reg(M68K_REG_A5, gMosCurrentA5);
     m68k_set_instr_hook_callback(m68k_instruction_hook);
 
@@ -353,8 +355,10 @@ int setupSystem(int argc, const char **argv, const char**)
     int runExternal = 0;
     int i;
 
-    // allocate a stack
-    gMosCurrentStackBase = mosNewPtr(MOS_STACK_SIZE) + MOS_STACK_SIZE;
+    // allocate a stack at the high end of free memory
+    gMosStackAllocation = mosMallocHigh(MOS_STACK_SIZE);
+    gMosCurStackBase = gMosStackAllocation + MOS_STACK_SIZE;
+    gMosApplLimit = gMosStackAllocation;
 
     // create other memory that will be accessed by the emulation
     // -- handle A-line traps here:
@@ -620,8 +624,12 @@ void setBreakpoints()
  */
 int main(int argc, const char **argv, const char **envp)
 {
+#ifdef NDEBUG
+    mosLogVerbosity(MOS_VERBOSITY_WARN);
+#else
     mosLogVerbosity(MOS_VERBOSITY_LOG);
     //mosLogVerbosity(MOS_VERBOSITY_TRACE);
+#endif
     mosMemoryInit();
 #ifdef MOS_UNITTESTS
     mosMemoryUnittests();
@@ -629,6 +637,7 @@ int main(int argc, const char **argv, const char **envp)
     const char *appName = NULL;
 
     setBreakpoints();
+    InitResourceManager();
 
     // run External is set if the ---run option was found. This has top priority
     int runExternal = setupSystem(argc, argv, envp);
@@ -656,6 +665,9 @@ int main(int argc, const char **argv, const char **envp)
         writeRsrcFiles(gRsrcFileBaseName);
     }
 
+#ifndef NDEBUG
+    mosTrace("Mosrun: running in debug mode\n");
+#endif
     runApp();
 
     mosWarning("main: we should never reach tis code\nexit(");

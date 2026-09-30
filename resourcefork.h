@@ -27,6 +27,18 @@
 #include "main.h"
 
 #include <map>
+#include <vector>
+
+class ResourceInfo {
+public:
+    ResourceInfo(mosPtr start, uint32_t size)
+    : inUse(true), start(start), size(size) { }
+    bool inUse;
+    mosPtr start;
+    uint32_t size;
+};
+
+extern std::vector<ResourceInfo> gResources;
 
 
 /**
@@ -52,8 +64,10 @@ extern std::map<int, CodeSegmentInfo> gCodeSegments;
 extern mosPtr gMosA5WorldStart;
 extern mosPtr gMosA5WorldEnd;
 
-
+void InitResourceManager();
 void dumpResourceMap();
+uint16_t CurResFile();
+void UseResFile(uint16_t refNum);
 int CountResources(unsigned int myResType);
 mosHandle GetResource(unsigned int myResType, unsigned short myId);
 mosHandle GetNamedResource(unsigned int myResType, const byte *pName);

@@ -68,8 +68,6 @@ typedef void (*mosTrap)(unsigned short);
 
 extern mosPtr theApp;
 extern unsigned int theAppSize;
-extern mosPtr theRsrc;
-extern unsigned int theRsrcSize;
 extern mosPtr theJumpTable;
 
 extern bool allout_data_mac_to_utf8;

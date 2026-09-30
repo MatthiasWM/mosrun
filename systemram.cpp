@@ -40,9 +40,14 @@ extern "C" {
 #include "musashi331/m68kops.h"
 }
 
+uint32_t gMosStackAllocation = 0;
 
 unsigned int gMosCurrentA5 = 0;
-unsigned int gMosCurrentStackBase = 0;
+uint32_t gMosCurStackBase = 0;
+uint32_t gMosApplLimit = 0;
+uint32_t gMosApplZone = kSystemHeapStart;       // 0x02AA: ApplZone application zone pointer
+uint32_t gMosGZMoveHnd = 0;
+uint32_t gMosGZRootHnd = 0;
 unsigned int gMosCurJTOffset = 0;
 uint8_t gMosResLoad = 1;
 unsigned int gMosSegHiEnable = 0;
@@ -89,10 +94,22 @@ unsigned int mosGetMemError()
 
 
 /**
+ * True if an access can go straight to emulated RAM, skipping all checks.
+ */
+static inline bool mosIsFastRam(unsigned int address, unsigned int size)
+{
+    return !gCheckMemory && address>=kSystemHeapStart && address<=kMosMemMax-size;
+}
+
+
+/**
  * Read from memeory, including the system page.
  */
 unsigned int m68k_read_memory_8(unsigned int address)
 {
+    if (mosIsFastRam(address, 1)) {
+        return MosMem[address];
+    }
     if (address>=kSystemHeapStart) {
         return mosRead8(address);
     }
@@ -123,6 +140,10 @@ unsigned int m68k_read_memory_16(unsigned int address)
 {
     if (gPendingBreakpoint && gPendingBreakpoint->address==address) {
         return gPendingBreakpoint->originalCmd;
+    }
+    if (mosIsFastRam(address, 2)) {
+        const byte *s = MosMem+address;
+        return (s[0]<<8) | s[1];
     }
     if (address>=kSystemHeapStart) {
         return mosRead16(address);
@@ -157,6 +178,10 @@ unsigned int m68k_read_memory_16(unsigned int address)
  */
 unsigned int m68k_read_memory_32(unsigned int address)
 {
+    if (mosIsFastRam(address, 4)) {
+        const byte *s = MosMem+address;
+        return ((unsigned int)s[0]<<24) | (s[1]<<16) | (s[2]<<8) | s[3];
+    }
     if (address>=kSystemHeapStart) {
         return mosRead32(address);
     }
@@ -174,6 +199,11 @@ unsigned int m68k_read_memory_32(unsigned int address)
         case 0x0316: return gMosMPWHandle;
         case 0x0904: return gMosCurrentA5; // CurrentA5 [GLOBAL VAR] boundary between app globals and app parameters
         case 0x09D6: return gMosWindowList; // WindowList [GLOBAL VAR]
+        case 0x0908: return gMosCurStackBase; // CurStackBase (start (top) of application stacke)
+        case 0x0130: return gMosApplLimit; // ApplLimit: application memory limit
+        case 0x0330: return gMosGZMoveHnd;
+        case 0x0328: return gMosGZRootHnd;
+        case 0x02AA: return gMosApplZone; // ApplZone application zone pointer
         case 0x0910: // CurApName [GLOBAL VAR] Name of current application (length byte followed by up to 31 characters) name of application [STRING[31]]
         case 0x0914:
         case 0x0918:
@@ -226,6 +256,10 @@ unsigned int m68k_read_disassembler_32(unsigned int address)
  */
 void m68k_write_memory_8(unsigned int address, unsigned int value)
 {
+    if (mosIsFastRam(address, 1)) {
+        MosMem[address] = value;
+        return;
+    }
     if (address>=kSystemHeapStart) {
         mosWrite8(address, value);
     } else {
@@ -237,6 +271,7 @@ void m68k_write_memory_8(unsigned int address, unsigned int value)
             case 0x0BB2: gMosSegHiEnable = value; break; // SegHiEnable [GLOBAL VAR]  (byte) 0 to disable MoveHHi in LoadSeg
             default:
                 mosDebug("Writing unsupported RAM.b address 0x%08X\n", address);
+                mosDebugPrintPCHistory();
                 debug_break();
                 break;
         }
@@ -249,6 +284,11 @@ void m68k_write_memory_8(unsigned int address, unsigned int value)
  */
 void m68k_write_memory_16(unsigned int address, unsigned int value)
 {
+    if (mosIsFastRam(address, 2)) {
+        byte *d = MosMem+address;
+        d[0] = value>>8; d[1] = value;
+        return;
+    }
     if (address>=kSystemHeapStart) {
         mosWrite16(address, value);
     } else {
@@ -272,6 +312,11 @@ void m68k_write_memory_16(unsigned int address, unsigned int value)
  */
 void m68k_write_memory_32(unsigned int address, unsigned int value)
 {
+    if (mosIsFastRam(address, 4)) {
+        byte *d = MosMem+address;
+        d[0] = value>>24; d[1] = value>>16; d[2] = value>>8; d[3] = value;
+        return;
+    }
     if (address>=kSystemHeapStart) {
         mosWrite32(address, value);
         return;

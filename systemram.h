@@ -26,9 +26,14 @@
 
 #include "main.h"
 
+extern uint32_t gMosStackAllocation; // Start of the memory block that holds the stack.
 
 extern unsigned int gMosCurrentA5;
-extern unsigned int gMosCurrentStackBase;
+extern uint32_t gMosCurStackBase;   // 0x0908: CurStackBase (start (top) of application stack)
+extern uint32_t gMosApplLimit;      // 0x0130: ApplLimit: application memory limit
+extern uint32_t gMosApplZone;       // 0x02AA: ApplZone application zone pointer
+extern uint32_t gMosGZMoveHnd;      // 0x0330: GZMoveHnd: Grow Zone Move Handler
+extern uint32_t gMosGZRootHnd;      // 0x0328: GZRootHnd: Grow Zone Root Handler
 extern unsigned int gMosCurJTOffset;
 extern uint8_t gMosResLoad;
 extern unsigned int gMosSegHiEnable;

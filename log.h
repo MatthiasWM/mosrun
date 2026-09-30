@@ -27,11 +27,12 @@
 #include <stdio.h>
 
 
-const int MOS_VERBOSITY_ERR   = 0;
-const int MOS_VERBOSITY_WARN  = 1;
-const int MOS_VERBOSITY_LOG   = 2;
-const int MOS_VERBOSITY_DEBUG = 3;
-const int MOS_VERBOSITY_TRACE = 4;
+const int MOS_VERBOSITY_SILENT = 0;
+const int MOS_VERBOSITY_ERR    = 1;
+const int MOS_VERBOSITY_WARN   = 2;
+const int MOS_VERBOSITY_LOG    = 3;
+const int MOS_VERBOSITY_DEBUG  = 4;
+const int MOS_VERBOSITY_TRACE  = 5;
 
 FILE *mosLogFile();
 void mosLogVerbosity(int v);

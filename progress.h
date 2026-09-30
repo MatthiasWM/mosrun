@@ -39,15 +39,20 @@
  * called traps, so that a postmortem dump can answer that question.
  */
 
+#ifdef NDEBUG
+// Counting instructions costs too much in release builds, so it is a no-op.
+inline void mosProgressInstruction() { }
+#else
 // Call once per 68k instruction that Musashi is about to execute.
 void mosProgressInstruction();
+
+// Total number of 68k instructions retired since startup.
+uint64_t mosProgressInstructionCount();
+#endif
 
 // Call once per native trap dispatch (i.e. every time a 0xAFFF glue stub
 // hands control to a native C trap handler).
 void mosProgressTrap(uint16_t trap);
-
-// Total number of 68k instructions retired since startup.
-uint64_t mosProgressInstructionCount();
 
 // Total number of native trap calls dispatched since startup.
 uint64_t mosProgressTrapCount();

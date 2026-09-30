@@ -35,8 +35,11 @@ extern "C" {
 
 
 static FILE *gMosLogFile = stderr;
+#ifdef NDEBUG
+static int gMosVerbosity = MOS_VERBOSITY_WARN;
+#else
 static int gMosVerbosity = MOS_VERBOSITY_TRACE;
-
+#endif
 
 void mosLogVerbosity(int v)
 {
@@ -104,10 +107,12 @@ void mosTrace(const char *format, ...)
  */
 void mosDebug(const char *format, ...)
 {
+#ifndef NDEBUG
     va_list va;
     va_start(va, format);
     vfprintf(stdout, format, va);
     va_end(va);
+#endif
 
     if (gMosVerbosity < MOS_VERBOSITY_DEBUG)
         return;

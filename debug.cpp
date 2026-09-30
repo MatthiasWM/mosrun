@@ -24,6 +24,7 @@
 #include "memory.h"
 #include "breakpoints.h"
 #include "log.h"
+#include "cpu.h"
 #include "systemram.h"
 #include "resourcefork.h"
 #include "progress.h"
@@ -83,7 +84,7 @@ void mosDebugPrintCPUState(int cpu, int registers, int stack)
     }
     if (cpu) {
         char buf[255];
-        m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+        mosDisassemble(buf, pc, M68K_CPU_TYPE_68020);
         fprintf(stderr, "0x%08X %s: %s\n", pc, mosDebugAddrToCodeOffsetStr(pc).c_str(), buf);
     }
 }
@@ -100,7 +101,7 @@ void mosDebugPrintPCHistory(int max)
         pc = m68k_get_pc_history(M68K_PC_HISTORY_SIZE-i-1);
         if (pc==0) continue;
         if (mosCheckMemoryAccess(pc, 4, false)) {
-            m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+            mosDisassemble(buf, pc, M68K_CPU_TYPE_68020);
             mosDebug("  %4d: 0x%08X %s %s\n", M68K_PC_HISTORY_SIZE-i, pc, printAddr(pc), buf);
         } else {
             mosDebug("  %4d: 0x%08X ERR.RRANGE <invalid memory>\n", M68K_PC_HISTORY_SIZE-i, pc);
@@ -108,7 +109,7 @@ void mosDebugPrintPCHistory(int max)
     }
     pc = m68k_get_reg(0L, M68K_REG_PC);
     if (mosCheckMemoryAccess(pc, 4, false)) {
-        m68k_disassemble(buf, pc, M68K_CPU_TYPE_68020);
+        mosDisassemble(buf, pc, M68K_CPU_TYPE_68020);
         mosDebug("  %4d: 0x%08X %s %s\n", 0, pc, printAddr(pc), buf);
     } else {
         mosDebug("  %4d: 0x%08X ERR.RRANGE <invalid memory>\n", 0, pc);
