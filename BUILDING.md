@@ -82,6 +82,9 @@ make
 ./mosrun
 ```
 
+To run the tests (text conversion unit tests, and the C/C++ tool chain with
+UTF-8 sources), run `ctest --output-on-failure` in the build directory.
+
 
 Linux
 -----

@@ -44,164 +44,26 @@
 #include "filename.h"
 
 #include "main.h"
+#include "textconv.h"
 
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 
-// TODO: not yet used. 
-static const unsigned short ucLUT[] = {
-    0x00C4, 0x00C5, 0x00C7, 0x00C9, 0x00D1, 0x00D6, 0x00DC, 0x00E1,
-    0x00E0, 0x00E2, 0x00E4, 0x00E3, 0x00E5, 0x00E7, 0x00E9, 0x00E8,
-    0x00EA, 0x00EB, 0x00ED, 0x00EC, 0x00EE, 0x00EF, 0x00F1, 0x00F3,
-    0x00F2, 0x00F4, 0x00F6, 0x00F5, 0x00FA, 0x00F9, 0x00FB, 0x00FC,
-    0x2020, 0x00B0, 0x00A2, 0x00A3, 0x00A7, 0x2022, 0x00B6, 0x00DF,
-    0x00AE, 0x00A9, 0x2122, 0x00B4, 0x00A8, 0x2260, 0x00C6, 0x00D8,
-    0x221E, 0x00B1, 0x2264, 0x2265, 0x00A5, 0x00B5, 0x2202, 0x2211,
-    0x220F, 0x03C0, 0x222B, 0x00AA, 0x00BA, 0x03A9, 0x00E6, 0x00F8,
-    0x00BF, 0x00A1, 0x00AC, 0x221A, 0x0192, 0x2248, 0x2206, 0x00AB,
-    0x00BB, 0x2026, 0x00A0, 0x00C0, 0x00C3, 0x00D5, 0x0152, 0x0153,
-    0x2013, 0x2014, 0x201C, 0x201D, 0x2018, 0x2019, 0x00F7, 0x25CA,
-    0x00FF, 0x0178, 0x2044, 0x20AC, 0x2039, 0x203A, 0xFB01, 0xFB02,
-    0x2021, 0x00B7, 0x201A, 0x201E, 0x2030, 0x00C2, 0x00CA, 0x00C1,
-    0x00CB, 0x00C8, 0x00CD, 0x00CE, 0x00CF, 0x00CC, 0x00D3, 0x00D4,
-    0xF8FF, 0x00D2, 0x00DA, 0x00DB, 0x00D9, 0x0131, 0x02C6, 0x02DC,
-    0x00AF, 0x02D8, 0x02D9, 0x02DA, 0x00B8, 0x02DD, 0x02DB, 0x02C7,
-};
-
-
-static char *buffer = 0;
-static int NBuffer = 0;
+// Size of the buffer that holds a converted filename.
+static const size_t kFilenameBufferSize = 2048;
 
 
 /**
- * Make sure that at least size bytes fit into the buffer.
+ * Copy a converted filename into the caller's buffer without overflowing it.
  */
-static void allocateBuffer(int size)
+static void copyFilename(char *buffer, const std::string &name)
 {
-    if (size>NBuffer) {
-        NBuffer = (size+1024)&0xfffffc00;
-        if (buffer)
-            free(buffer);
-        buffer = (char*)malloc(NBuffer);
-    }
+    size_t n = name.size() < kFilenameBufferSize-1 ? name.size() : kFilenameBufferSize-1;
+    memcpy(buffer, name.data(), n);
+    buffer[n] = 0;
 }
-
-
-/**
- * Convert a text block in Unix/UTF-8 encoding to MacRoman.
- *
- * This will fail if there is a partial UTF-8 character at the end of the 
- * text block!
- *
- * \return pointer to a static buffer
- */
-char *mosDataUnixToMac(const char *text, unsigned int &size)
-{
-    // The Mac string can nevr be longer than the Unix string
-    const char *s = text;
-    unsigned int i, count = size;
-    // now we have the size. Make sure we have space
-    allocateBuffer(count+1);
-    // copy and convert characters
-    byte *d = (byte*)buffer;
-    for (i=0;i<size;i++) {
-        byte c = (byte)*s++;
-        if (c=='\n') {
-            *d++ = '\r';
-        } else if (c<128) {
-            *d++ = c;
-        } else {
-            // UTF8 character
-            unsigned short uc = 0;
-            if ( (c&0xe0)==0xc0) {
-                uc =  ((((unsigned short)c)&0x1f)<<6);
-                uc |=  (((unsigned short)(byte)s[0])&0x3f);
-                s++; size--;
-            } else if ( (c&0xf0)==0xe0) {
-                uc =  ((((unsigned short)c)&0x1f)<<12);
-                uc |= ((((unsigned short)(byte)s[0])&0x3f)<<6);
-                uc |=  (((unsigned short)(byte)s[1])&0x3f);
-                s+=2; size-=2;
-            }
-            if (uc) {
-                int j;
-                for (j=0; j<128; j++) {
-                    if (ucLUT[j]==uc) {
-                        *d++ = j+128;
-                        break;
-                    }
-                }
-                if (j==128)
-                    *d++ = '$';
-            } else {
-                *d++ = '$';
-            }
-        }
-    }
-    *d = 0;
-    size = ((char*)d)-buffer;
-    return buffer;
-}
-
-
-
-/**
- * Convert a text block in MacRoman encoding to Unix/UTF-8.
- *
- * \return pointer to a static buffer
- */
-char *mosDataMacToUnix(const char *text, unsigned int &size)
-{
-    // the Unix string is potentialy longer than the Mac string, so start counting
-    const char *s = text;
-    unsigned int i, count = 0;
-    for (i=0;i<size;i++) {
-        byte c = (byte)*s++;
-        if (c<128) {
-            count++;
-        } else {
-            unsigned short uc = ucLUT[c-128];
-            if (uc<128) {
-                count++;
-            } else if (uc<0x07ff) {
-                count+=2;
-            } else if (uc<0x07ff) {
-                count+=3;
-            }
-        }
-    }
-    // now we have the size. Make sure we have space
-    allocateBuffer(count+1);
-    // copy and convert characters
-    byte *d = (byte*)buffer;
-    s = text;
-    for (i=0;i<size;i++) {
-        byte c = (byte)*s++;
-        if (c=='\r') {
-            *d++ = '\n';
-        } else if (c<128) {
-            *d++ = c;
-        } else {
-            unsigned short uc = ucLUT[c-128];
-            if (uc<128) {
-                *d++ = uc;
-            } else if (uc<0x07ff) {
-                *d++ = ((uc>>6) & 0x1f) | 0xc0;
-                *d++ = (uc & 0x3f) | 0x80;
-            } else if (uc<0x07ff) {
-                *d++ = ((uc>>12) & 0x0f) | 0xe0;
-                *d++ = ((uc>>6) & 0x3f) | 0x80;
-                *d++ = (uc & 0x3f) | 0x80;
-            }
-        }
-    }
-    *d = 0;
-    size = count;
-    return buffer;
-}
-
 
 
 /**
@@ -317,10 +179,7 @@ static void convertFromMac(const char *filename, char *buffer)
             break;
     }
     //  fprintf(stderr, "FromMac: '%s' = '%s'\n", filename, buffer);
-    unsigned int size = strlen(buffer);
-    char *b2 = mosDataMacToUnix(buffer, size);
-    // FIXME: this can create an ugly overflow!œ
-    strcpy(buffer, b2);
+    copyFilename(buffer, mosTextMacToHost(std::string(buffer)));
 }
 
 
@@ -403,10 +262,7 @@ static void convertToMac(const char *filename, char *buffer)
     }
     // FIXME: when do we ned a trailing ':'
     //  fprintf(stderr, "ToMac: '%s' = '%s'\n", filename, buffer);
-    unsigned int size = strlen(buffer);
-    char *b2 = mosDataUnixToMac(buffer, size);
-    // FIXME: this can create an ugly overflow!œ
-    strcpy(buffer, b2);
+    copyFilename(buffer, mosTextHostToMac(std::string(buffer)));
 }
 
 
@@ -421,7 +277,7 @@ static void convertToMac(const char *filename, char *buffer)
  */
 char *mosFilenameConvertTo(const char *filename, int dstType)
 {
-    static char buffer[2048];
+    static char buffer[kFilenameBufferSize];
     char *tmpname;
     int srcType = mosFilenameGuessType(filename);
     if (srcType==dstType || srcType==MOS_TYPE_UNKNOWN) {

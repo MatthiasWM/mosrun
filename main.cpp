@@ -19,38 +19,6 @@
  The latest source code can be found at https://github.com/MatthiasWM/mosrun
  */
 
-//
-// This is a proposal for possible flags that may make life easier when using
-// mosrun in a Unix environment.
-//
-// ---help
-// ---run
-// ---aaa-bbb-ccc-to-ddd=eee
-//    aaa is "all":   all files in this command line will be treated this way
-//           "allin": all input streams will be filtered
-//           "allout":all output streams will be filtered
-//           "next":  only the next file will be treated this way, overrides all, default
-//           "regex": all files which match the following pattern, default if eee is set
-//           "stdin": apply to stdin stream (abbreviate as "in")
-//           "stdout":apply to stdout stream
-//           "stderr":apply to stderr stream
-//           "conout":apply to stdout and stderr stream
-//    bbb is "name":  apply a filter to the file name only
-//           "data":  apply a filter to the data in the stream or file only
-//           "file":  apply filters to the file name and file data, (default)
-//    ccc is "unix":  convert from utf-8, '\n', '/'
-//           "mac":   convert from MacRom, '\r', ':'
-//    to is  "to":    indicates format conversion
-//           "raw":   overrides default filters with absolutely no conversion
-//    ddd    as ccc   convert ot format
-//    eee    "..."    optional name pattern for "regex" attribute
-//                    if regex is set, eee must be filled
-//                    if eee is set, regex is implied and no other option must be chosen
-//
-// Implied rules are ---stdin-to-mac ---conout-mac-to-host
-//
-// example: ARM6asm ---unix-to-mac test.s -o ---keep test.s.o
-//
 
 //
 // 4/Aug/2013:
@@ -145,12 +113,24 @@ const char *gMosHelpText =
 "Options:\n"
 "  ---help : print this help page\n"
 "  ---verbosity=xxx : set verbosity level to trace, debug, log, warn or err\n"
-"  ---stdout-raw : do not filter stdout (default converts form Mac to Unix)\n"
 "  ---log=filename : log all messages to a file\n"
 "  ---checkmem : enable memory access checking\n"
 "  ---checkmemstrict : check memory and exit on fault\n"
-"  ---allout-data-mac-to-utf8 : convert all file output from Mac encoding to Unicode\n"
-"  ---allin-data-utf8-to-mac : EXPERIMENTAL! convert all file input from Unicode to Mac encoding\n"
+"\n"
+"Text conversion:\n"
+"  MPW tools expect MacRoman text with CR line endings. The host uses UTF-8\n"
+"  with LF (or CRLF) line endings. 'utf8' converts, 'raw' passes bytes unchanged.\n"
+"  ---text=utf8|raw : shorthand for ---text-in and ---text-out\n"
+"  ---text-in=utf8|raw : convert text files that the tool reads from UTF-8/LF,\n"
+"      files that are already MacRoman/CR are not changed (default: raw)\n"
+"  ---text-out=utf8|raw : convert text files that the tool writes to UTF-8/LF\n"
+"      (default: raw)\n"
+"  ---text-ext=.ext[,.ext...] : also treat files with these extensions as text\n"
+"      built in: " MOS_DEFAULT_TEXT_EXTENSIONS "\n"
+"  ---stdout=utf8|raw : convert stdout to UTF-8/LF (default: utf8)\n"
+"  ---stderr=utf8|raw : convert stderr to UTF-8/LF (default: utf8)\n"
+"  Files that the tool opens as binary, or that contain NUL bytes, are never\n"
+"  converted. Characters that MacRoman can't express are replaced with '\u25CA'.\n"
 ;
 
 // application global variables
@@ -164,13 +144,57 @@ byte gCheckMemory = 0;
 byte gCheckMemory = 2;
 #endif
 
-byte gFilterStdoutDataFrom = MOS_TYPE_MAC;
-byte gFilterStdoutDataTo   = MOS_TYPE_UNIX;
-
-bool allout_data_mac_to_utf8 = false;
-bool allin_data_utf8_to_mac = false;
-
 char *gRsrcFileBaseName = nullptr;
+
+/**
+ * Parse a 'utf8' or 'raw' option value.
+ */
+static void parseHostFormat(const char *arg, const char *value, bool &toHost)
+{
+    if (strcmp(value, "utf8")==0) {
+        toHost = true;
+    } else if (strcmp(value, "raw")==0) {
+        toHost = false;
+    } else {
+        mosError("Option '%s' expects 'utf8' or 'raw'\n", arg);
+        exit(1);
+    }
+}
+
+
+/**
+ * Handle the text conversion options.
+ *
+ * \return true if this was a text conversion option
+ */
+static bool parseTextOption(const char *arg)
+{
+    if (strncmp(arg, "---text=", 8)==0) {
+        parseHostFormat(arg, arg+8, gMosTextIn);
+        gMosTextOut = gMosTextIn;
+    } else if (strncmp(arg, "---text-in=", 11)==0) {
+        parseHostFormat(arg, arg+11, gMosTextIn);
+    } else if (strncmp(arg, "---text-out=", 12)==0) {
+        parseHostFormat(arg, arg+12, gMosTextOut);
+    } else if (strncmp(arg, "---text-ext=", 12)==0) {
+        mosTextAddExtensions(arg+12);
+    } else if (strncmp(arg, "---stdout=", 10)==0) {
+        parseHostFormat(arg, arg+10, gMosStdoutToHost);
+    } else if (strncmp(arg, "---stderr=", 10)==0) {
+        parseHostFormat(arg, arg+10, gMosStderrToHost);
+    // Deprecated names of the options above
+    } else if (strcmp(arg, "---stdout-raw")==0) {
+        gMosStdoutToHost = false;
+    } else if (strcmp(arg, "---allin-data-utf8-to-mac")==0) {
+        gMosTextIn = true;
+    } else if (strcmp(arg, "---allout-data-mac-to-utf8")==0) {
+        gMosTextOut = true;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 
 /**
  * Find native tools in load path
@@ -453,7 +477,7 @@ int setupSystem(int argc, const char **argv, const char**)
             arg = mosFilenameConvertTo(arg, MOS_TYPE_MAC);
             mosWrite32(vArgv+4*di, mosNewPtr(arg)); di++;
         } else {
-            if (strcmp(argv[i], "---help")==0) {
+            if (strcmp(arg, "---help")==0) {
                 puts(gMosHelpText);
                 exit(0);
             } else if (strcmp(arg, "---checkmem")==0) {
@@ -475,9 +499,8 @@ int setupSystem(int argc, const char **argv, const char**)
             } else if (strcmp(arg, "---verbosity=err")==0) {
                 mosLogVerbosity(MOS_VERBOSITY_ERR);
                 mosDebug("Setting verbosity to ERR\n");
-            } else if (strcmp(arg, "---stdout-raw")==0) {
-                gFilterStdoutDataTo = MOS_TYPE_RAW;
-                mosDebug("Setting stdout filter to RAW\n");
+            } else if (parseTextOption(arg)) {
+                // handled
             } else if (strncmp(arg, "---log=", 7)==0) {
                 mosDebug("Setting log file to '%s'\n", arg+7);
                 FILE *f = fopen(arg+7, "wb");
@@ -490,10 +513,6 @@ int setupSystem(int argc, const char **argv, const char**)
             } else if (strncmp(arg, "---dumprsrc=", 12)==0) {
               mosDebug("Dumping resource fork content to files '%s.cpp' and '%s.h'\n", arg+12, arg+12);
               gRsrcFileBaseName = strdup(arg+12);
-            } else if (strcmp(arg, "---allout-data-mac-to-utf8")==0) {
-              allout_data_mac_to_utf8 = true;
-            } else if (strcmp(arg, "---allin-data-utf8-to-mac")==0) {
-              allin_data_utf8_to_mac = true;
             } else if (strncmp(arg, "---", 3)==0) {
                 mosError("Unknown command line argument '%s'\n", arg);
                 exit(1);
@@ -618,9 +637,6 @@ void setBreakpoints()
 
 /**
  * Main entry point.
- *
- * \todo run stdout through a Mac-to-Unix filter
- * \todo TripleDash arguments?   ARM6asm ---unix2mac myFile.s -o ---mac2unix myFile.o ---stdout2unix ---stderr2unix
  */
 int main(int argc, const char **argv, const char **envp)
 {

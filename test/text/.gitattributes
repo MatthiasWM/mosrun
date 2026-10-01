@@ -1,0 +1,4 @@
+# The Mac fixtures use MacRoman and CR line endings, never touch them.
+mac/* -text
+# The host fixtures use UTF-8 and LF line endings.
+utf8/* text eol=lf

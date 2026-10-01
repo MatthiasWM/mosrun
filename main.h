@@ -70,14 +70,9 @@ extern mosPtr theApp;
 extern unsigned int theAppSize;
 extern mosPtr theJumpTable;
 
-extern bool allout_data_mac_to_utf8;
-extern bool allin_data_utf8_to_mac;
-
 extern char *gRsrcFileBaseName;
 void writeRsrcFiles(const char *basename);
 
-extern byte gFilterStdoutDataFrom;
-extern byte gFilterStdoutDataTo;
 extern byte gCheckMemory; // 0=don't check, 1=check, 2=check and exit
 
 // For command line tools, 16MB seemed to have been plenty. For NTK, make it 64MB.

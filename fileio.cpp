@@ -24,6 +24,7 @@
 #include "filename.h"
 #include "memory.h"
 #include "log.h"
+#include "textconv.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,6 +45,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include <algorithm>
+#include <ctype.h>
 #include <vector>
 
 extern "C" {
@@ -51,11 +54,316 @@ extern "C" {
 }
 
 
+bool gMosTextIn = false;
+bool gMosTextOut = false;
+bool gMosStdoutToHost = true;
+bool gMosStderrToHost = true;
+
+// Report at most this many unconvertible characters per file.
+static const size_t kMaxMisfitMessages = 3;
+
+static std::vector<std::string> gTextExtensions;
+
+
 std::vector<MosFile*> mosFileRegistry = {
-    new MosFile{ STDIN_FILENO,  "/dev/stdin", true, false },
-    new MosFile{ STDOUT_FILENO, "/dev/stdout", true, false },
-    new MosFile{ STDERR_FILENO, "/dev/stderr", true, false }
+    new MosFile(STDIN_FILENO,  "/dev/stdin", false),
+    new MosFile(STDOUT_FILENO, "/dev/stdout", false),
+    new MosFile(STDERR_FILENO, "/dev/stderr", false)
 };
+
+
+/**
+ * Add a list of extensions separated by commas or spaces.
+ */
+static void addExtensions(const char *list)
+{
+    std::string ext;
+    for (const char *s = list; ; s++) {
+        char c = *s;
+        if (c==0 || c==',' || c==' ') {
+            if (!ext.empty()) {
+                if (ext[0]!='.') ext.insert(0, ".");
+                gTextExtensions.push_back(ext);
+                ext.clear();
+            }
+            if (c==0) break;
+        } else {
+            ext += (char)tolower((unsigned char)c);
+        }
+    }
+}
+
+
+static void addDefaultExtensions()
+{
+    if (gTextExtensions.empty())
+        addExtensions(MOS_DEFAULT_TEXT_EXTENSIONS);
+}
+
+
+/**
+ * Add a list of file extensions that will be treated as text files.
+ * Extensions are separated by commas or spaces, the leading '.' is optional.
+ */
+void mosTextAddExtensions(const char *list)
+{
+    addDefaultExtensions();
+    addExtensions(list);
+}
+
+
+/**
+ * Check if a file is a text file by looking at its extension.
+ */
+bool mosFileIsText(const char *filename)
+{
+    addDefaultExtensions();
+    const char *name = mosFilenameName(filename);
+    const char *dot = strrchr(name, '.');
+    if (!dot) return false;
+    std::string ext(dot);
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return (char)tolower(c); });
+    return std::find(gTextExtensions.begin(), gTextExtensions.end(), ext) != gTextExtensions.end();
+}
+
+
+/**
+ * Write all buffered text files when the tool exits without closing them.
+ */
+static void flushAllFiles()
+{
+    for (MosFile *f : mosFileRegistry) {
+        if (f) f->flush();
+    }
+}
+
+
+/**
+ * Read an entire file from the host.
+ */
+static bool readHostFile(const std::string &filename, std::string &content)
+{
+    int fd = ::open(filename.c_str(), O_RDONLY|O_BINARY);
+    if (fd==-1) return false;
+    char buf[16384];
+    for (;;) {
+        int n = (int)::read(fd, buf, sizeof(buf));
+        if (n<=0) break;
+        content.append(buf, n);
+    }
+    ::close(fd);
+    return true;
+}
+
+
+/**
+ * Write a buffer to a file descriptor, retrying after partial writes.
+ */
+static bool writeAll(int fd, const char *data, size_t size)
+{
+    while (size>0) {
+        int n = (int)::write(fd, data, (unsigned int)size);
+        if (n<=0) return false;
+        data += n;
+        size -= n;
+    }
+    return true;
+}
+
+
+MosFile::MosFile(int fd, const char *filename, bool allocated)
+:   fd(fd),
+    filename(filename),
+    allocated(allocated)
+{
+}
+
+
+/**
+ * Decide if this file must be converted, and if so, load it into memory.
+ *
+ * \param mpwFlags the flags that the tool used to open the file; bit 0 is
+ *        set for reading and bit 1 for writing
+ */
+void MosFile::setupTextConversion(unsigned short mpwFlags)
+{
+    bool reading = (mpwFlags & 1);
+    bool writing = (mpwFlags & 2);
+    if (mpwFlags & MOS_O_BINARY) return; // the tool tells us this is not text
+    if (!(gMosTextIn && reading) && !(gMosTextOut && writing)) return;
+    if (!mosFileIsText(filename.c_str())) return;
+
+    std::string content;
+    readHostFile(filename, content);
+    MosTextInfo info = mosTextAnalyze((const uint8_t*)content.data(), content.size());
+    if (info.binary) return;
+    bool hostText = info.isHostText();
+
+    if (!writing) {
+        if (!hostText) return; // already in Mac format
+    } else if (content.empty()) {
+        if (!gMosTextOut) return;
+    } else {
+        if (!hostText) return; // keep writing in the format that we found
+    }
+
+    if (hostText) {
+        std::vector<MosTextMisfit> misfits;
+        data = mosTextHostToMac(content, &misfits);
+        if (!misfits.empty()) {
+            std::string msg;
+            for (size_t i=0; i<misfits.size() && i<kMaxMisfitMessages; i++) {
+                char line[300];
+                snprintf(line, sizeof(line), "%s:%u: '%s' (U+%04X) is not in MacRoman, replaced with '\u25CA'\n",
+                         filename.c_str(), misfits[i].line,
+                         mosTextUtf8(misfits[i].codepoint).c_str(), misfits[i].codepoint);
+                msg += line;
+            }
+            if (misfits.size()>kMaxMisfitMessages) {
+                char line[300];
+                snprintf(line, sizeof(line), "%s: and %u more characters replaced with '\u25CA'\n",
+                         filename.c_str(), (unsigned int)(misfits.size()-kMaxMisfitMessages));
+                msg += line;
+            }
+            mosWarning("%s", msg.c_str());
+        }
+    }
+    inMemory = true;
+    append = (mpwFlags & MOS_O_APPEND);
+    writeAsHost = writing;
+    if (writing) {
+        static bool flushAtExit = false;
+        if (!flushAtExit) {
+            atexit(flushAllFiles);
+            flushAtExit = true;
+        }
+    }
+    mosDebug("%s: using converted text in memory\n", filename.c_str());
+}
+
+
+int MosFile::read(void *dst, unsigned int size)
+{
+    if (!inMemory)
+        return (int)::read(fd, dst, size);
+    if (pos>=data.size()) return 0;
+    size_t n = std::min((size_t)size, data.size()-pos);
+    memcpy(dst, data.data()+pos, n);
+    pos += n;
+    return (int)n;
+}
+
+
+int MosFile::write(const void *src, unsigned int size)
+{
+    if (!inMemory) {
+        bool toHost = (fd==STDOUT_FILENO && gMosStdoutToHost)
+                   || (fd==STDERR_FILENO && gMosStderrToHost);
+        if (!toHost)
+            return (int)::write(fd, src, size);
+        std::string text = mosTextMacToHost((const uint8_t*)src, size);
+        if (!writeAll(fd, text.data(), text.size())) return -1;
+        return (int)size;
+    }
+    if (append) pos = data.size();
+    if (pos+size>data.size()) data.resize(pos+size);
+    memcpy(&data[pos], src, size);
+    pos += size;
+    dirty = true;
+    return (int)size;
+}
+
+
+/**
+ * Set the read and write position, using the host's SEEK_SET etc.
+ *
+ * \return the new position, or -1 if it is invalid
+ */
+long MosFile::seek(long offset, int whence)
+{
+    if (!inMemory)
+        return (long)lseek(fd, offset, whence);
+    long base = 0;
+    switch (whence) {
+        case SEEK_SET: base = 0; break;
+        case SEEK_CUR: base = (long)pos; break;
+        case SEEK_END: base = (long)data.size(); break;
+        default: errno = EINVAL; return -1;
+    }
+    if (base+offset<0) {
+        errno = EINVAL;
+        return -1;
+    }
+    pos = (size_t)(base+offset);
+    return (long)pos;
+}
+
+
+/**
+ * Write a modified text file back to the host, converting it if needed.
+ */
+int MosFile::flush()
+{
+    if (!inMemory || !dirty || deleted) return 0;
+    dirty = false;
+    MosTextInfo info = mosTextAnalyze((const uint8_t*)data.data(), data.size());
+    std::string out = (writeAsHost && !info.binary) ? mosTextMacToHost(data) : data;
+    if (lseek(fd, 0, SEEK_SET)==-1) return -1;
+#ifdef WIN32
+    if (_chsize(fd, 0)==-1) return -1;
+#else
+    if (ftruncate(fd, 0)==-1) return -1;
+#endif
+    return writeAll(fd, out.data(), out.size()) ? 0 : -1;
+}
+
+
+int MosFile::close()
+{
+    int ret = flush();
+    if (::close(fd)==-1) ret = -1;
+    inMemory = false;
+    data.clear();
+    return ret;
+}
+
+
+/**
+ * Forget all buffered content, because the file was deleted while open.
+ */
+void MosFile::discard()
+{
+    deleted = true;
+    dirty = false;
+    data.clear();
+    pos = 0;
+}
+
+
+/**
+ * Delete a file on the host.
+ *
+ * If the tool still has the file open, its buffered content is discarded, so
+ * that closing the file or exiting the tool does not write it back.
+ */
+static int deleteHostFile(const char *uxFilename)
+{
+    struct stat st;
+    bool exists = (stat(uxFilename, &st)==0);
+    for (MosFile *f : mosFileRegistry) {
+        if (!f || !f->allocated) continue;
+        bool same = (f->filename==uxFilename);
+        struct stat fst;
+        if (!same && exists && st.st_ino!=0 && fstat(f->fd, &fst)==0)
+            same = (fst.st_dev==st.st_dev && fst.st_ino==st.st_ino);
+        if (same) {
+            mosDebug("%s: deleted while open, discarding buffered content\n", uxFilename);
+            f->discard();
+        }
+    }
+    return ::remove(uxFilename);
+}
 
 
 ///* 'd' => "directory" ops */
@@ -93,11 +401,10 @@ void trapSyFAccess(uint16_t) {
     const char *filename = (char*)mosToHost(m68k_read_memory_32(sp+4));
     unsigned int cmd = m68k_read_memory_32(sp+8);
     unsigned int file = m68k_read_memory_32(sp+12);
-    unsigned short flags = m68k_read_memory_16(file);
-    mosTrace("Accessing file '%s', cmd=0x%08X, arg=0x%08X, flags=0x%04X\n", filename, cmd, file, flags);
-    if (cmd==0x00006401) { // Delete file
+    if (cmd==0x00006401) { // Delete file, there is no file block, so file is NULL
+        mosTrace("Deleting file '%s'\n", filename);
         char *uxFilename = strdup(mosFilenameConvertTo(filename, MOS_TYPE_UNIX));
-        ::remove(uxFilename);
+        deleteHostFile(uxFilename);
         m68k_set_reg(M68K_REG_D0, 0); // no error
         free(uxFilename);
         return;
@@ -106,6 +413,8 @@ void trapSyFAccess(uint16_t) {
         m68k_set_reg(M68K_REG_D0, EINVAL); // no error
         return;
     }
+    unsigned short flags = m68k_read_memory_16(file);
+    mosTrace("Accessing file '%s', cmd=0x%08X, arg=0x%08X, flags=0x%04X\n", filename, cmd, file, flags);
     char *uxFilename = strdup(mosFilenameConvertTo(filename, MOS_TYPE_UNIX));
     // TODO: add our MosFile reference for internal data management
     // TODO: find the actual file and open it
@@ -136,8 +445,11 @@ void trapSyFAccess(uint16_t) {
         m68k_set_reg(M68K_REG_D0, errno); // just return the error code
         free(uxFilename);
     } else {
+        MosFile *mosFile = new MosFile(fd, uxFilename, true);
+        free(uxFilename);
+        mosFile->setupTextConversion(flags);
         m68k_write_memory_32(file+8, mosFileRegistry.size());
-        mosFileRegistry.push_back(new MosFile{fd, uxFilename, true, true});
+        mosFileRegistry.push_back(mosFile);
         m68k_set_reg(M68K_REG_D0, 0); // no error
     }
 }
@@ -151,7 +463,7 @@ void trapSyClose(uint16_t) {
     unsigned int file = m68k_read_memory_32(sp+4);
     uint32_t ix = m68k_read_memory_32(file+8);
     MosFile *mosFile = mosFileRegistry.at(ix);
-    int ret = close(mosFile->fd);
+    int ret = mosFile->close();
     if (ret==-1) {
         m68k_set_reg(M68K_REG_D0, errno);
     } else {
@@ -160,10 +472,7 @@ void trapSyClose(uint16_t) {
     if (mosFile->allocated) {
         mosFileRegistry.at(ix) = nullptr;
         m68k_write_memory_32(file+8, 0);
-        if (mosFile->filename) {
-            free((char*)mosFile->filename);
-        }
-        free(mosFile);
+        delete mosFile;
     }
 }
 
@@ -179,37 +488,7 @@ void trapSyRead(uint16_t) {
     MosFile *mosFile = mosFileRegistry.at(ix);
     void *buffer = mosToHost(m68k_read_memory_32(file+16));
     unsigned int size = m68k_read_memory_32(file+12);
-    int ret = 0;
-    if (allin_data_utf8_to_mac) {
-      // TODO: this is fishy because the file length is not calculated correctly
-      char ubuf[8];
-      unsigned int usize = 0;
-      unsigned int uindex = 0;
-      for (unsigned int i=0; i<size; i++) {
-        ret = (int)::read(mosFile->fd, ubuf, 1);
-        if (ret<1) break;
-        usize = 1;
-        int c = ubuf[0];
-        if ( (c&0xe0)==0xc0) {
-          ret = (int)::read(mosFile->fd, ubuf+1, 1);
-          if (ret<1) break;
-          usize = 2;
-        } else if ( (c&0xf0)==0xe0) {
-          ret = (int)::read(mosFile->fd, ubuf+1, 2);
-          if (ret<1) break;
-          usize = 3;
-        }
-        if (usize > 0) {
-          char *d = mosDataUnixToMac(ubuf, usize);
-          memcpy((char*)buffer+uindex, d, usize);
-          uindex += usize;
-        }
-      }
-      if (ret!=-1 && uindex>0)
-        ret = uindex;
-    } else {
-      ret = (int)::read(mosFile->fd, buffer, size);
-    }
+    int ret = mosFile->read(buffer, size);
     if (ret==-1) {
         m68k_set_reg(M68K_REG_D0, errno);
     } else {
@@ -230,17 +509,7 @@ void trapSyWrite(uint16_t) {
     void *buffer = mosToHost(m68k_read_memory_32(file+16));
     unsigned int size = m68k_read_memory_32(file+12);
 
-    // convert buffer if it is not binary // FIXME: this needs a lot more work!
-    if (mosFile->fd==1) { // stdout
-        if (gFilterStdoutDataFrom==MOS_TYPE_MAC && gFilterStdoutDataTo==MOS_TYPE_UNIX)
-            buffer = (void*)mosDataMacToUnix((char*)buffer, size);
-    } else if (mosFile->fd==2) { // stderr
-        buffer = (void*)mosDataMacToUnix((char*)buffer, size);
-    } else if (allout_data_mac_to_utf8) {
-      buffer = (void*)mosDataMacToUnix((char*)buffer, size);
-    }
-
-    int ret = write(mosFile->fd, buffer, size);
+    int ret = mosFile->write(buffer, size);
     if (ret==-1) {
         m68k_set_reg(M68K_REG_D0, errno);
     } else {
@@ -292,18 +561,18 @@ void trapSyIoctl(uint16_t) {
             // ioctl return erroro in D0, and result in A6-4 (where the offset was originally)
             // TODO: more error checking
             unsigned int whence = m68k_read_memory_32(param);
-            unsigned int offset = m68k_read_memory_32(param+4);
+            int32_t offset = (int32_t)m68k_read_memory_32(param+4);
             switch (whence) {
                 case MOS_SEEK_SET: whence = SEEK_SET; break;
                 case MOS_SEEK_CUR: whence = SEEK_CUR; break;
                 case MOS_SEEK_END: whence = SEEK_END; break;
             }
-            int ret = (unsigned int)lseek(mosFile->fd, offset, whence);
+            long ret = mosFile->seek(offset, whence);
             if (ret==-1) {
                 m68k_write_memory_32(param+4, -1);
                 m68k_set_reg(M68K_REG_D0, errno);
             } else {
-                m68k_write_memory_32(param+4, ret);
+                m68k_write_memory_32(param+4, (uint32_t)ret);
                 m68k_set_reg(M68K_REG_D0, 0); // no error
             }
             break; }
@@ -777,7 +1046,7 @@ int mosPBDelete(mosPtr paramBlock, bool)
     cFilename[fnLen] = 0;
 
     mosDebug("mosPBDelete: deleteing file '%s'\n", cFilename);
-    int ret = ::remove(cFilename);
+    int ret = deleteHostFile(cFilename);
     if (ret==-1) {
         mosError("mosPBDelete: can't remove file '%s', %s\n", cFilename, strerror(errno));
         m68k_write_memory_16(paramBlock+16, mosDupFNErr);

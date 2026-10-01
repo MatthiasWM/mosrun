@@ -37,8 +37,6 @@ char *mosFilenameConvertTo(const char *filename, int type);
 const char *mosFilenameName(const char *filename);
 const char *mosFilenameNameUnix(const char *filename);
 
-char *mosDataUnixToMac(const char *text, unsigned int &size);
-char *mosDataMacToUnix(const char *text, unsigned int &size);
 
 
 #endif /* defined(__mosrun__filename__) */

@@ -74,8 +74,30 @@ will try to load the MPW tool in the following argument.
 
 Example: `mosrun ---run MPWTools/ARM6asm test.s`
 
-Further triple dash options will follow, concerning the conversion of 
-file names and data streams.
+Run `mosrun ---help` (or any embedded tool with `---help`) for a list of all
+triple dash options.
+
+### Text files
+
+MPW tools expect MacRoman text with CR line endings, while modern editors and
+tools use UTF-8 with LF line endings. By default, mosrun passes files through
+unchanged, so existing build scripts keep working. To build from UTF-8 sources:
+
+    ARM6c ---text-in=utf8 -c hello.c -o hello.o
+    ARMCpp ---text-in=utf8 -c world.cpp -o world.o
+    ARMLink -AOF -o app.aof hello.o world.o
+
+`---text-in=utf8` converts text files that the tool reads, `---text-out=utf8`
+converts text files that the tool writes (listings, symbol files), and
+`---text=utf8` does both. Files that are already MacRoman with CR line endings
+are left alone. Only files with a known source code extension are converted;
+add more with `---text-ext=.cfg,.via`. Files that the tool opens as binary, and
+files containing NUL bytes, are never converted. Characters that have no
+MacRoman equivalent are replaced with '◊', and mosrun reports the first three
+with their file name and line number.
+
+stdout and stderr are always converted to UTF-8 unless `---stdout=raw` or
+`---stderr=raw` is given.
 
 Alternate usage: If a symbolic link is created which points to mosrun, then
 mosrun will use the name of the link to search for the tool binary. If for
@@ -136,7 +158,7 @@ Tested and Untested Tools
 | Tool              |    | Description / Status                                |
 |-------------------|----|-----------------------------------------------------|
 | AIFtoNTK          | OK | This tool converts an ARM Image Format (AIF) file into an NTK “streamed frame” file. |
-|                   |    | Tool creates correct .ntkc files. **Note:** the configuration file must use Mac style newline characters! **Note:** to use the .ntkc file with MacOS NTK, set its type to 'ntkc' with *ResEdit* |
+|                   |    | Tool creates correct .ntkc files. **Note:** the configuration file must use Mac style newline characters, or run the tool with `---text-in=utf8 ---text-ext=.<extension of the configuration file>`. **Note:** to use the .ntkc file with MacOS NTK, set its type to 'ntkc' with *ResEdit* |
 | ARM6asm           | OK | ARM AOF Macro Assembler 2.21, May 10 1994 |
 |                   |    | Tool has been used successfully to create object files from assembler. |
 | ARM6c             |  i | Norcroft Newton OS Newton C vsn 4.62b1, Feb 20 1995 |
@@ -152,7 +174,7 @@ Tested and Untested Tools
 | ProtocolGenTool   |  i | Generate stubs for interfaces and implementatiosn |
 |                   |    | At least we now know that Elvis is dead. |
 | Rex               |  i | Tool to bild a ROM Extension file form various parts using a configuration file |
-|                   |    | Tool creates .rex files, but those have not been tested yet. **Note:** the configuration file must use Mac style newline characters! |
+|                   |    | Tool creates .rex files, but those have not been tested yet. **Note:** the configuration file must use Mac style newline characters, or run the tool with `---text-in=utf8 ---text-ext=.<extension of the configuration file>`. |
 | ARMCFront         |  x | Outdated ARM C++-to-C compiler |
 |                   |    | No need to support this. |
 | CallFinder        |  x | No documentation found. |

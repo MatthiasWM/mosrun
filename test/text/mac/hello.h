@@ -1,0 +1,1 @@
+/* hello.h Ð GrŸ§e aus Kšln */#ifndef HELLO_H#define HELLO_Hextern const char *greeting(void);#define TRADEMARK "Newtonª"#endif

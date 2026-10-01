@@ -45,6 +45,7 @@ set(
     progress.cpp progress.h
     traps.cpp traps.h
     filename.cpp filename.h
+    textconv.cpp textconv.h
     systemram.cpp systemram.h
     gestalt.cpp gestalt.h
     quickdraw.cpp quickdraw.h
@@ -78,6 +79,14 @@ if(MSVC)
 else()
     add_executable(DumpRex          tools/dumprex.cpp tools/relocatepkg.cpp)
     add_executable(BuildRex         tools/buildrex.cpp tools/relocatepkg.cpp)
+endif()
+
+enable_testing()
+add_executable(textconv_test test/textconv_test.cpp textconv.cpp textconv.h)
+add_test(NAME textconv COMMAND textconv_test)
+if(NOT WIN32)
+    add_test(NAME text_chain
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/test/text/run_chain.sh $<TARGET_FILE_DIR:ARM6c>)
 endif()
 
 install(TARGETS mosrun
